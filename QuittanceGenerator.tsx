@@ -1,0 +1,1033 @@
+import { useState, useRef } from 'react';
+import { FileText, Download, Printer, Upload, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { Invoice } from '../types';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+
+const TYPES = [
+  { id: 'loyer', label: '🏠 Quittance de Loyer', color: '#0d9488' },
+  { id: 'service', label: '🔧 Quittance de Service', color: '#7c3aed' },
+  { id: 'transport', label: '🚚 Quittance de Transport', color: '#d97706' },
+  { id: 'education', label: '📚 Quittance Éducation', color: '#2563eb' },
+  { id: 'sante', label: '🏥 Quittance de Santé', color: '#dc2626' },
+  { id: 'general', label: '📄 Quittance Générale', color: '#475569' },
+];
+
+function removeBg(src: string): Promise<string> {
+  return new Promise(res => {
+    const img = new Image(); img.crossOrigin='anonymous';
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width=img.width; c.height=img.height;
+      const ctx=c.getContext('2d')!; ctx.drawImage(img,0,0);
+      const d=ctx.getImageData(0,0,c.width,c.height); const px=d.data;
+      const w=c.width,h=c.height,s=Math.max(5,Math.floor(Math.min(w,h)*0.1));
+      let bR=0,bG=0,bB=0,n=0;
+      for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(x<s||x>=w-s||y<s||y>=h-s){const i=(y*w+x)*4;bR+=px[i];bG+=px[i+1];bB+=px[i+2];n++;}
+      bR=Math.round(bR/n);bG=Math.round(bG/n);bB=Math.round(bB/n);
+      for(let i=0;i<px.length;i+=4){const dr=px[i]-bR,dg=px[i+1]-bG,db=px[i+2]-bB,dist=Math.sqrt(dr*dr+dg*dg+db*db);if(dist<30)px[i+3]=0;else if(dist<60)px[i+3]=Math.round(((dist-30)/30)*255);}
+      ctx.putImageData(d,0,0); res(c.toDataURL('image/png'));
+    };
+    img.onerror=()=>res(src); img.src=src;
+  });
+}
+
+// Colorize image pixels
+function colorizeImg(src: string, color: string): Promise<string> {
+  return new Promise(res => {
+    const img = new Image(); img.crossOrigin='anonymous';
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width=img.width; c.height=img.height;
+      const ctx=c.getContext('2d')!; ctx.drawImage(img,0,0);
+      const r=parseInt(color.slice(1,3),16), g=parseInt(color.slice(3,5),16), b=parseInt(color.slice(5,7),16);
+      const d=ctx.getImageData(0,0,c.width,c.height);
+      for(let i=0;i<d.data.length;i+=4) if(d.data[i+3]>20){d.data[i]=r;d.data[i+1]=g;d.data[i+2]=b;}
+      ctx.putImageData(d,0,0); res(c.toDataURL('image/png'));
+    };
+    img.onerror=()=>res(src); img.src=src;
+  });
+}
+const STAMP_COLORS = ['#dc2626','#1e40af','#059669','#7c3aed','#d97706','#0f172a','#be185d','#0284c7'];
+
+// Stamp template generator
+function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number, startSz: number, minSz: number, wt='bold', fam='Helvetica') {
+  let sz = startSz;
+  while (sz > minSz) { ctx.font = `${wt} ${sz}px ${fam}`; if (ctx.measureText(text).width <= maxW) break; sz--; }
+  ctx.font = `${wt} ${sz}px ${fam}`;
+}
+function generateStamp(text: string, style: string, color: string): string {
+  const c = document.createElement('canvas'); const s=200; c.width=s; c.height=s;
+  const ctx=c.getContext('2d')!; ctx.clearRect(0,0,s,s);
+  const cx=s/2, cy=s/2, t=text.toUpperCase();
+  if (style==='round') {
+    ctx.beginPath(); ctx.arc(cx,cy,88,0,Math.PI*2); ctx.strokeStyle=color; ctx.lineWidth=5; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx,cy,78,0,Math.PI*2); ctx.strokeStyle=color; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle';
+    fitText(ctx,t,130,26,8); ctx.fillText(t,cx,cy-8);
+    ctx.font='bold 11px Helvetica'; ctx.fillText('✓ CERTIFIÉ',cx,cy+18);
+  } else if (style==='square') {
+    ctx.strokeStyle=color; ctx.lineWidth=5; ctx.strokeRect(12,25,s-24,s-50);
+    ctx.strokeStyle=color; ctx.lineWidth=2; ctx.strokeRect(20,33,s-40,s-66);
+    ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle';
+    fitText(ctx,t,140,30,8); ctx.fillText(t,cx,cy-10);
+    ctx.font='bold 12px Helvetica'; ctx.fillText('✓ VALIDÉ',cx,cy+22);
+  } else if (style==='elegant') {
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(-0.15);
+    ctx.strokeStyle=color; ctx.lineWidth=3; ctx.beginPath(); ctx.ellipse(0,0,85,40,0,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle';
+    fitText(ctx,text,140,22,8,'italic bold','Georgia'); ctx.fillText(text,0,-4);
+    ctx.font='9px Georgia'; ctx.globalAlpha=0.7; ctx.fillText('Document certifié',0,18);
+    ctx.globalAlpha=1; ctx.restore();
+  } else if (style==='diamond') {
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(Math.PI/4);
+    ctx.strokeStyle=color; ctx.lineWidth=4; ctx.strokeRect(-55,-55,110,110);
+    ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.strokeRect(-48,-48,96,96);
+    ctx.restore(); ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle';
+    fitText(ctx,t,100,20,8); ctx.fillText(t,cx,cy-5);
+  } else if (style==='seal') {
+    ctx.beginPath(); ctx.arc(cx,cy,88,0,Math.PI*2); ctx.strokeStyle=color; ctx.lineWidth=4; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx,cy,45,0,Math.PI*2); ctx.strokeStyle=color; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle';
+    fitText(ctx,t,70,18,7); ctx.fillText(t,cx,cy);
+    ctx.font='bold 9px Helvetica';
+    const txt='★ OFFICIEL ★'; for(let i=0;i<txt.length;i++){ctx.save();ctx.translate(cx,cy);ctx.rotate(-Math.PI/2+(i/txt.length)*Math.PI*1.3+0.3);ctx.fillText(txt[i],0,-62);ctx.restore();}
+  } else if (style==='hexagon') {
+    ctx.beginPath(); for(let i=0;i<6;i++){const a=(Math.PI/3)*i-Math.PI/2; i===0?ctx.moveTo(cx+85*Math.cos(a),cy+85*Math.sin(a)):ctx.lineTo(cx+85*Math.cos(a),cy+85*Math.sin(a));} ctx.closePath(); ctx.strokeStyle=color; ctx.lineWidth=4; ctx.stroke();
+    ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle';
+    fitText(ctx,t,110,22,8); ctx.fillText(t,cx,cy);
+  } else if (style==='ribbon') {
+    ctx.save(); ctx.translate(cx,cy); ctx.fillStyle=color; ctx.globalAlpha=0.15; ctx.fillRect(-90,-18,180,36); ctx.globalAlpha=1;
+    ctx.strokeStyle=color; ctx.lineWidth=2; ctx.strokeRect(-90,-18,180,36);
+    ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle';
+    fitText(ctx,t,160,20,8); ctx.fillText(t,0,0); ctx.restore();
+  } else {
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(-0.12);
+    ctx.strokeStyle=color; ctx.lineWidth=4; ctx.strokeRect(-82,-38,164,76);
+    ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.strokeRect(-76,-32,152,64);
+    ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle';
+    fitText(ctx,t,136,28,8); ctx.fillText(t,0,-5);
+    ctx.font='bold 10px Helvetica'; ctx.fillText('✓',0,18);
+    ctx.restore();
+  }
+  return c.toDataURL('image/png');
+}
+const STAMP_STYLES = [
+  {id:'classic',label:'▭ Classique'},{id:'round',label:'○ Rond'},{id:'square',label:'□ Carré'},
+  {id:'elegant',label:'◇ Élégant'},{id:'diamond',label:'◆ Diamant'},{id:'seal',label:'◎ Sceau'},
+  {id:'hexagon',label:'⬡ Hexagone'},{id:'ribbon',label:'⊞ Ruban'},
+];
+
+interface Props { currentInvoice: Invoice; onTriggerToast: (m: string, t?: 'success'|'warning'|'info') => void; }
+
+// Field input helper
+const F = ({ label, value, onChange, placeholder, type = 'text', required, mono, half }: { label: string; value: string|number; onChange: (v: any) => void; placeholder?: string; type?: string; required?: boolean; mono?: boolean; half?: boolean }) => (
+  <div className={half ? '' : ''}>
+    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{label}{required && <span className="text-rose-500 ml-0.5">*</span>}</label>
+    <input type={type} value={value} onChange={e => onChange(type === 'number' ? Number(e.target.value) || 0 : e.target.value)} placeholder={placeholder}
+      className={`w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 ${mono ? 'font-mono font-bold' : ''}`} />
+  </div>
+);
+
+// Section wrapper
+const Section = ({ title, icon, color, children, defaultOpen = true }: { title: string; icon: string; color: string; children: React.ReactNode; defaultOpen?: boolean }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
+        <span className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+          <span>{icon}</span><span>{title}</span>
+          {!defaultOpen && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{backgroundColor:color+'15',color}}>requis</span>}
+        </span>
+        {open ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+      </button>
+      {open && <div className="px-4 pb-4 space-y-3 border-t border-slate-100 pt-3">{children}</div>}
+    </div>
+  );
+};
+
+// Templates per type
+const TEMPLATES: Record<string, { id: string; name: string; color: string }[]> = {
+  loyer: [
+    { id: 'l1', name: 'Standard', color: '#0d9488' },
+    { id: 'l2', name: 'Moderne', color: '#0891b2' },
+    { id: 'l3', name: 'Minimaliste', color: '#475569' },
+    { id: 'l4', name: 'Professionnel', color: '#1e40af' },
+    { id: 'l5', name: 'Élégant', color: '#7c3aed' },
+  ],
+  service: [
+    { id: 's1', name: 'Standard', color: '#7c3aed' },
+    { id: 's2', name: 'Corporate', color: '#1e293b' },
+    { id: 's3', name: 'Créatif', color: '#db2777' },
+    { id: 's4', name: 'Tech', color: '#4f46e5' },
+    { id: 's5', name: 'Simple', color: '#64748b' },
+  ],
+  transport: [
+    { id: 't1', name: 'Standard', color: '#d97706' },
+    { id: 't2', name: 'Logistique', color: '#b45309' },
+    { id: 't3', name: 'Express', color: '#dc2626' },
+    { id: 't4', name: 'Maritime', color: '#0284c7' },
+    { id: 't5', name: 'Sobre', color: '#475569' },
+  ],
+  education: [
+    { id: 'e1', name: 'Standard', color: '#2563eb' },
+    { id: 'e2', name: 'Académique', color: '#1e40af' },
+    { id: 'e3', name: 'Enfantin', color: '#f59e0b' },
+    { id: 'e4', name: 'Universitaire', color: '#0f172a' },
+    { id: 'e5', name: 'Moderne', color: '#7c3aed' },
+  ],
+  sante: [
+    { id: 'h1', name: 'Standard', color: '#dc2626' },
+    { id: 'h2', name: 'Clinique', color: '#0d9488' },
+    { id: 'h3', name: 'Pharmacie', color: '#059669' },
+    { id: 'h4', name: 'Laboratoire', color: '#4f46e5' },
+    { id: 'h5', name: 'Sobre', color: '#475569' },
+  ],
+  general: [
+    { id: 'g1', name: 'Standard', color: '#475569' },
+    { id: 'g2', name: 'Bleu', color: '#2563eb' },
+    { id: 'g3', name: 'Vert', color: '#059669' },
+    { id: 'g4', name: 'Rouge', color: '#dc2626' },
+    { id: 'g5', name: 'Violet', color: '#7c3aed' },
+  ],
+};
+
+export const QuittanceGenerator: React.FC<Props> = ({ currentInvoice, onTriggerToast }) => {
+  const [type, setType] = useState('loyer');
+  const [tplColor, setTplColor] = useState('#0d9488');
+  const previewRef = useRef<HTMLDivElement>(null);
+  const signCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasDrawn, setHasDrawn] = useState(false);
+  const infoBase = TYPES.find(t => t.id === type)!;
+  const info = { ...infoBase, color: tplColor };
+
+  // Build initial data from supplier profile
+  const buildInit = () => {
+    let init: Record<string, any> = { numero: `QT-${new Date().getFullYear()}-${String(Math.floor(Math.random()*9999)).padStart(4,'0')}`, date_emission: new Date().toISOString().split('T')[0], mode_paiement: 'Espèces' };
+    try { const s = localStorage.getItem('factureset_supplier'); if(s){const p=JSON.parse(s); init={...init, nom_proprietaire:p.companyName, entreprise_proprietaire:p.companyName, nom_entreprise:p.companyName, nom_societe:p.companyName, nom_etablissement:p.companyName, nom_clinique:p.companyName, adresse_proprietaire:p.address, adresse:p.address, telephone_proprietaire:p.phone, telephone:p.phone, rccm:p.rccm, ifu:p.ifu, logo:p.logoUrl};}} catch{}
+    return init;
+  };
+
+  const [d, setD] = useState<Record<string, any>>(buildInit);
+  const u = (k: string, v: any) => setD(p => ({...p, [k]: v}));
+  const g = (k: string) => d[k] || '';
+  const gn = (k: string) => d[k] || 0;
+
+  // Reset when type changes
+  const handleTypeChange = (newType: string) => {
+    setType(newType);
+    setD(buildInit());
+    const tpls = TEMPLATES[newType];
+    if (tpls) setTplColor(tpls[0].color);
+  };
+
+  const [stampUrl, setStampUrl] = useState(currentInvoice.stampImageUrl || '');
+  const [signUrl, setSignUrl] = useState(currentInvoice.signatureImageUrl || '');
+  const [stampScale, setStampScale] = useState(1);
+  const [signScale, setSignScale] = useState(1);
+  const [stampRot, setStampRot] = useState(0);
+  const [signRot, setSignRot] = useState(0);
+  const [stampPos, setStampPos] = useState({ x: 20, y: 85 });
+  const [signPos, setSignPos] = useState({ x: 75, y: 88 });
+  const [dragging, setDragging] = useState<'stamp'|'sign'|null>(null);
+  const [stampTextInput, setStampTextInput] = useState('PAYÉ');
+  const [stampStyleSel, setStampStyleSel] = useState('classic');
+  const [stampColorSel, setStampColorSel] = useState('#dc2626');
+  const [logoUrl, setLogoUrl] = useState(() => { try { const s=localStorage.getItem('factureset_supplier'); if(s){return JSON.parse(s).logoUrl||'';} } catch{} return ''; });
+
+  // QR Code generator
+  const makeQR = (data: string): string => {
+    const c=document.createElement('canvas'); const sz=100; c.width=sz; c.height=sz;
+    const ctx=c.getContext('2d')!; ctx.fillStyle='#fff'; ctx.fillRect(0,0,sz,sz); ctx.fillStyle='#000';
+    let h=0; for(let i=0;i<data.length;i++){h=((h<<5)-h)+data.charCodeAt(i);h|=0;}
+    const cs=5, cols=Math.floor(sz/cs);
+    for(let i=0;i<cols;i++) for(let j=0;j<cols;j++) if((Math.sin(i*12.9898+j*78.233+h)*43758.5453%1+1)%1>0.5) ctx.fillRect(i*cs,j*cs,cs,cs);
+    const dm=(x:number,y:number)=>{ctx.fillStyle='#000';ctx.fillRect(x,y,25,25);ctx.fillStyle='#fff';ctx.fillRect(x+5,y+5,15,15);ctx.fillStyle='#000';ctx.fillRect(x+8,y+8,9,9);};
+    dm(5,5); dm(sz-30,5); dm(5,sz-30);
+    return c.toDataURL('image/png');
+  };
+  // qrDataUrl computed after total
+
+  // Signature canvas handlers
+  const initCanvas = () => {
+    const cv = signCanvasRef.current; if (!cv) return;
+    const ctx = cv.getContext('2d'); if (!ctx) return;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  };
+  const startDraw = (e: React.MouseEvent|React.TouchEvent) => {
+    const cv = signCanvasRef.current; if (!cv) return;
+    const ctx = cv.getContext('2d'); if (!ctx) return;
+    setIsDrawing(true); setHasDrawn(true);
+    const r = cv.getBoundingClientRect();
+    const x = 'touches' in e ? e.touches[0].clientX - r.left : e.clientX - r.left;
+    const y = 'touches' in e ? e.touches[0].clientY - r.top : e.clientY - r.top;
+    ctx.beginPath(); ctx.moveTo(x, y);
+  };
+  const draw = (e: React.MouseEvent|React.TouchEvent) => {
+    if (!isDrawing) return;
+    const cv = signCanvasRef.current; if (!cv) return;
+    const ctx = cv.getContext('2d'); if (!ctx) return;
+    const r = cv.getBoundingClientRect();
+    const x = 'touches' in e ? e.touches[0].clientX - r.left : e.clientX - r.left;
+    const y = 'touches' in e ? e.touches[0].clientY - r.top : e.clientY - r.top;
+    ctx.lineTo(x, y); ctx.stroke();
+  };
+  const stopDraw = () => setIsDrawing(false);
+  const clearCanvas = () => { initCanvas(); setHasDrawn(false); };
+  const saveCanvasSign = async () => {
+    const cv = signCanvasRef.current; if (!cv) return;
+    const raw = cv.toDataURL('image/png');
+    const cleaned = await removeBg(raw);
+    setSignUrl(cleaned);
+    onTriggerToast('Signature enregistrée !', 'success');
+  };
+
+  const fmt = (n: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(n);
+
+  // Compute total
+  const computeTotal = () => {
+    if (type === 'loyer') return gn('montant_loyer') + gn('charges_locatives') + gn('caution') + gn('avance') + gn('taxes') - gn('remise');
+    if (type === 'service') return gn('quantite') * gn('prix_unitaire') + gn('taxes') - gn('remise');
+    if (type === 'transport') return gn('frais_transport') + gn('assurance') + gn('taxes');
+    if (type === 'education') return gn('montant_frais') + gn('taxes') - gn('reduction') - gn('bourse');
+    if (type === 'sante') return gn('cout_consultation') + gn('frais_examens') + gn('frais_medicaments') + gn('taxes') - gn('reduction');
+    return gn('quantite') * gn('prix_unitaire') + gn('taxes') - gn('remise');
+  };
+  const total = computeTotal();
+  const reliquat = total - gn('montant_paye');
+  const qrDataUrl = makeQR(`QT:${g('numero')}|${g('date_emission')}|${total}`);
+
+  // ═══ Export: Build standalone HTML with inline styles (no Tailwind dependency) ═══
+  const buildExportHTML = () => {
+    const c = info.color;
+    const emName = g('nom_proprietaire')||g('nom_entreprise')||g('nom_societe')||g('nom_etablissement')||g('nom_clinique')||'—';
+    const emTel = g('telephone_proprietaire')||g('telephone')||'';
+    const emAddr = g('adresse_proprietaire')||g('adresse')||'';
+    const clName = g('nom_locataire')||g('nom_client')||g('nom_expediteur')||g('nom_etudiant')||g('nom_patient')||'—';
+    const clTel = g('telephone_locataire')||g('telephone_client')||g('telephone_expediteur')||g('telephone_parent')||g('telephone_patient')||'';
+    const emLabel = type==='loyer'?'BAILLEUR':type==='sante'?'ÉTABLISSEMENT':type==='transport'?'TRANSPORTEUR':type==='education'?'ÉTABLISSEMENT':'ÉMETTEUR';
+    const clLabel = type==='loyer'?'LOCATAIRE':type==='sante'?'PATIENT':type==='transport'?'EXPÉDITEUR':type==='education'?'ÉLÈVE / PARENT':'CLIENT';
+
+    // Build details lines
+    let details = '';
+    if (type==='loyer') {
+      if(g('adresse_bien')) details += `<p>📍 Bien: <b>${g('adresse_bien')}</b></p>`;
+      if(g('type_logement')) details += `<p>🏠 Type: ${g('type_logement')} ${g('numero_appartement')?'N°'+g('numero_appartement'):''}</p>`;
+      if(g('ville')) details += `<p>🌍 ${g('ville')} ${g('pays')?'— '+g('pays'):''}</p>`;
+      if(g('periode_concernee')) details += `<p>📅 Période: ${g('periode_concernee')}</p>`;
+    } else if (type==='service') {
+      if(g('type_service')) details += `<p>🔧 Service: <b>${g('type_service')}</b></p>`;
+      if(g('description_service')) details += `<p>📝 ${g('description_service')}</p>`;
+      if(g('duree_prestation')) details += `<p>⏱️ Durée: ${g('duree_prestation')}</p>`;
+    } else if (type==='transport') {
+      if(g('ville_depart')||g('ville_arrivee')) details += `<p>🚚 Trajet: ${g('ville_depart')||'___'} → ${g('ville_arrivee')||'___'}</p>`;
+      if(g('type_marchandise')) details += `<p>📦 ${g('type_marchandise')}</p>`;
+      if(g('poids')) details += `<p>⚖️ Poids: ${g('poids')}</p>`;
+      if(g('chauffeur')) details += `<p>👤 Chauffeur: ${g('chauffeur')}</p>`;
+      if(g('numero_vehicule')) details += `<p>🚗 Véhicule: ${g('numero_vehicule')}</p>`;
+      if(g('nom_destinataire')) details += `<p>📬 Destinataire: ${g('nom_destinataire')} ${g('telephone_destinataire')?'— '+g('telephone_destinataire'):''}</p>`;
+    } else if (type==='education') {
+      if(g('nom_etudiant')) details += `<p>🎓 Élève: <b>${g('nom_etudiant')}</b></p>`;
+      if(g('matricule')) details += `<p>🔢 Matricule: ${g('matricule')}</p>`;
+      if(g('classe')) details += `<p>📚 Classe: ${g('classe')} ${g('filiere')?'— '+g('filiere'):''}</p>`;
+      if(g('annee_scolaire')) details += `<p>📅 Année: ${g('annee_scolaire')}</p>`;
+      if(g('type_frais')) details += `<p>💰 ${g('type_frais')}</p>`;
+    } else if (type==='sante') {
+      if(g('nom_patient')) details += `<p>🩺 Patient: <b>${g('nom_patient')}</b> ${g('sexe')?'('+g('sexe')+')':''}</p>`;
+      if(g('medecin')) details += `<p>👨‍⚕️ Dr. ${g('medecin')}</p>`;
+      if(g('type_prestation')) details += `<p>💊 ${g('type_prestation')}</p>`;
+      if(g('assurance_sante')) details += `<p>🛡️ Assurance: ${g('assurance_sante')}</p>`;
+    } else {
+      if(g('objet_paiement')) details += `<p>📝 ${g('objet_paiement')}</p>`;
+      if(g('description')) details += `<p>${g('description')}</p>`;
+    }
+
+    // Build financial lines
+    let finance = '';
+    if (type==='loyer') {
+      if(gn('montant_loyer')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Loyer</span><span>${fmt(gn('montant_loyer'))}</span></div>`;
+      if(gn('charges_locatives')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Charges</span><span>${fmt(gn('charges_locatives'))}</span></div>`;
+      if(gn('caution')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Caution</span><span>${fmt(gn('caution'))}</span></div>`;
+    } else if (type==='transport') {
+      if(gn('frais_transport')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Frais transport</span><span>${fmt(gn('frais_transport'))}</span></div>`;
+      if(gn('assurance')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Assurance</span><span>${fmt(gn('assurance'))}</span></div>`;
+    } else if (type==='sante') {
+      if(gn('cout_consultation')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Consultation</span><span>${fmt(gn('cout_consultation'))}</span></div>`;
+      if(gn('frais_examens')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Examens</span><span>${fmt(gn('frais_examens'))}</span></div>`;
+      if(gn('frais_medicaments')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Médicaments</span><span>${fmt(gn('frais_medicaments'))}</span></div>`;
+    }
+    if(gn('taxes')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;color:#666;"><span>Taxes</span><span>+${fmt(gn('taxes'))}</span></div>`;
+    if(gn('remise')>0||gn('reduction')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;color:#059669;"><span>Remise</span><span>-${fmt(gn('remise')||gn('reduction'))}</span></div>`;
+
+    const qr = makeQR(`QT:${g('numero')}|${g('date_emission')}|${total}`);
+    return `<div style="width:500px;padding:20px;background:#fff;font-family:Helvetica,Arial,sans-serif;font-size:10px;color:#1e293b;">
+      <table style="width:100%;margin-bottom:10px;border-bottom:3px solid ${c};padding-bottom:8px;" cellpadding="0" cellspacing="0"><tr>
+        <td style="width:55px;vertical-align:middle;text-align:left;"><img src="${qr}" style="width:50px;height:50px;" /></td>
+        <td style="text-align:center;vertical-align:middle;padding:0 8px;">
+          <div style="font-size:16px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:${c};">${info.label}</div>
+          <div style="font-size:9px;color:#666;margin-top:3px;">N° <b>${g('numero')}</b> — ${g('date_emission')}</div>
+        </td>
+        <td style="width:55px;vertical-align:middle;text-align:right;">${logoUrl?`<img src="${logoUrl}" style="width:50px;height:50px;object-fit:contain;border-radius:6px;" />`:''}</td>
+      </tr></table>
+      <table style="width:100%;margin-bottom:12px;border:1px solid ${c}40;border-radius:6px;overflow:hidden;" cellpadding="0" cellspacing="0"><tr>
+        <td style="width:50%;vertical-align:top;padding:8px;background:${c}08;border-right:1px solid ${c}30;">
+          <div style="font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:${c};margin-bottom:3px;">${emLabel}</div>
+          <div style="font-weight:bold;font-size:11px;">${emName}</div>
+          ${emAddr?`<div style="font-size:9px;color:#555;">${emAddr}</div>`:''}
+          ${emTel?`<div style="font-size:9px;color:#555;">Tél: ${emTel}</div>`:''}
+          ${g('rccm')?`<div style="font-size:8px;color:#888;">RCCM: ${g('rccm')}</div>`:''}
+          ${g('ifu')?`<div style="font-size:8px;color:#888;">IFU: ${g('ifu')}</div>`:''}
+        </td>
+        <td style="width:50%;vertical-align:top;padding:8px;">
+          <div style="font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:${c};margin-bottom:3px;">${clLabel}</div>
+          <div style="font-weight:bold;font-size:11px;">${clName}</div>
+          ${clTel?`<div style="font-size:9px;color:#555;">Tél: ${clTel}</div>`:''}
+        </td>
+      </tr></table>
+      ${details?`<div style="margin-bottom:10px;padding:8px;border-radius:6px;border:1px solid ${c}30;background:${c}06;font-size:9px;line-height:1.6;">${details}</div>`:''}
+      <div style="margin-bottom:10px;padding:8px;border:1px solid ${c}40;border-radius:6px;font-size:9px;">
+        ${finance}
+        <div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:2px solid ${c};font-size:14px;font-weight:900;color:${c};"><span>TOTAL TTC</span><span>${fmt(total)}</span></div>
+        ${gn('montant_paye')>0?`<div style="display:flex;justify-content:space-between;margin-top:4px;padding:3px 6px;background:#e6f7e6;border-radius:4px;font-size:9px;"><span style="color:#155724;">Payé (${g('mode_paiement')||'—'})</span><b style="color:#155724;">${fmt(gn('montant_paye'))}</b></div>`:''}
+        ${reliquat>0?`<div style="display:flex;justify-content:space-between;margin-top:3px;padding:4px 6px;background:#fef2f2;border:1px solid #fca5a5;border-radius:4px;font-weight:900;color:#b91c1c;"><span>RESTE À PAYER</span><span>${fmt(reliquat)}</span></div>`:''}
+      </div>
+      ${(stampUrl||signUrl)?`<div style="position:relative;min-height:60px;margin:8px 0;padding-top:6px;border-top:1px dashed ${c}40;">
+        ${stampUrl?`<img src="${stampUrl}" style="position:absolute;left:${stampPos.x}%;top:5px;width:${60*stampScale}px;height:${60*stampScale}px;object-fit:contain;transform:translateX(-50%) rotate(${stampRot}deg);" />`:''}
+        ${signUrl?`<img src="${signUrl}" style="position:absolute;left:${signPos.x}%;top:5px;width:${80*signScale}px;height:${45*signScale}px;object-fit:contain;transform:translateX(-50%) rotate(${signRot}deg);" />`:''}
+      </div>`:''}
+      <div style="margin-top:10px;padding-top:6px;border-top:1px dashed #ccc;text-align:center;font-size:7px;color:#999;">
+        <b>FACTUREset — Plateforme SaaS</b> · Contact: +2290166336546
+      </div>
+    </div>`;
+  };
+
+  const handlePDF = async () => {
+    onTriggerToast('Génération PDF...','info');
+    try {
+      // Render HTML in hidden container
+      let el = document.getElementById('__qt_r') as HTMLDivElement;
+      if (!el) { el = document.createElement('div'); el.id='__qt_r'; el.style.cssText='position:fixed;left:-4000px;top:0;z-index:-1;background:#fff;'; document.body.appendChild(el); }
+      el.innerHTML = buildExportHTML();
+      const target = el.firstElementChild as HTMLElement;
+      // Wait images
+      const imgs = target.querySelectorAll('img');
+      await Promise.all(Array.from(imgs).map(i => i.complete ? Promise.resolve() : new Promise<void>(r => { i.onload=()=>r(); i.onerror=()=>r(); setTimeout(r,1500); })));
+      await new Promise(r => setTimeout(r, 100));
+      const cv = await html2canvas(target, { scale:2, useCORS:true, allowTaint:true, backgroundColor:'#fff', logging:false });
+      const imgData = cv.toDataURL('image/jpeg', 0.92);
+      const pdf = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+      const pw=190, ph=277, ratio=cv.width/cv.height;
+      let fw=pw, fh=pw/ratio; if(fh>ph){fh=ph;fw=ph*ratio;}
+      pdf.addImage(imgData, 'JPEG', (210-fw)/2, 10, fw, fh);
+      pdf.save(`${g('numero')}.pdf`);
+      onTriggerToast('Quittance PDF téléchargée !','success');
+    } catch(e) { console.error('PDF Error:', e); onTriggerToast('Erreur génération PDF: ' + (e as Error).message, 'warning'); }
+  };
+
+  const handlePrint = async () => {
+    onTriggerToast('Préparation...','info');
+    try {
+      let el = document.getElementById('__qt_r') as HTMLDivElement;
+      if (!el) { el = document.createElement('div'); el.id='__qt_r'; el.style.cssText='position:fixed;left:-4000px;top:0;z-index:-1;background:#fff;'; document.body.appendChild(el); }
+      el.innerHTML = buildExportHTML();
+      const target = el.firstElementChild as HTMLElement;
+      const imgs = target.querySelectorAll('img');
+      await Promise.all(Array.from(imgs).map(i => i.complete ? Promise.resolve() : new Promise<void>(r => { i.onload=()=>r(); i.onerror=()=>r(); setTimeout(r,1500); })));
+      await new Promise(r => setTimeout(r, 100));
+      const cv = await html2canvas(target, { scale:2, useCORS:true, allowTaint:true, backgroundColor:'#fff', logging:false });
+      const du = cv.toDataURL('image/png');
+      const w = window.open('','_blank');
+      if(w){ w.document.write(`<!DOCTYPE html><html><head><title>${g('numero')}</title><style>body{margin:0;display:flex;justify-content:center;background:#fff;}img{max-width:100%;height:auto;}</style></head><body><img src="${du}" onload="setTimeout(function(){window.print();},400);"/></body></html>`); w.document.close(); }
+      else { await handlePDF(); }
+    } catch { onTriggerToast('Erreur impression','warning'); }
+  };
+
+  return (
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5">
+      {/* Header */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center space-x-2 mb-1"><FileText className="w-5 h-5 text-blue-600" /><h1 className="text-lg font-extrabold text-slate-900">Générateur de Quittances Professionnelles</h1></div>
+          <p className="text-xs text-slate-500">Tous les champs obligatoires selon les normes internationales de facturation.</p>
+        </div>
+        <div className="flex items-center space-x-2">
+          <button onClick={handlePDF} className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm flex items-center space-x-1.5"><Download className="w-4 h-4" /><span>PDF</span></button>
+          <button onClick={handlePrint} className="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm flex items-center space-x-1.5"><Printer className="w-4 h-4" /><span>Imprimer</span></button>
+        </div>
+      </div>
+
+      {/* Type selector */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        {TYPES.map(t => (
+          <button key={t.id} onClick={() => handleTypeChange(t.id)}
+            className={`py-2.5 px-2 rounded-xl text-[11px] font-bold border transition-all ${type===t.id ? 'text-white shadow-md border-transparent':'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+            style={type===t.id?{backgroundColor:tplColor}:{}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Template selector per type */}
+      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Modèle de quittance</p>
+        <div className="flex space-x-2 overflow-x-auto pb-1">
+          {(TEMPLATES[type]||[]).map(tpl => (
+            <button key={tpl.id} onClick={() => setTplColor(tpl.color)}
+              className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${tplColor===tpl.color ? 'text-white border-transparent shadow-md':'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+              style={tplColor===tpl.color?{backgroundColor:tpl.color}:{}}>
+              {tpl.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* LEFT FORM */}
+        <div className="lg:col-span-7 space-y-4">
+
+          {/* Logo upload — common to all types */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              {logoUrl ? <img src={logoUrl} alt="Logo" className="w-10 h-10 object-contain rounded-lg border border-slate-200 p-0.5" /> : <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-lg">🏢</div>}
+              <div>
+                <p className="text-xs font-bold text-slate-900">Logo de l'entreprise</p>
+                <p className="text-[10px] text-slate-400">Apparaît en haut à droite de la quittance</p>
+              </div>
+            </div>
+            <label className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-[11px] font-bold px-3 py-1.5 rounded-lg border border-blue-200 cursor-pointer flex items-center space-x-1">
+              <Upload className="w-3.5 h-3.5" /><span>{logoUrl ? 'Changer' : 'Ajouter'}</span>
+              <input type="file" accept="image/*" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setLogoUrl(ev.target?.result as string);onTriggerToast('Logo ajouté !','success');};r.readAsDataURL(f);}} />
+            </label>
+          </div>
+
+          {/* ═══ LOYER ═══ */}
+          {type === 'loyer' && (<>
+            <Section title="Propriétaire / Bailleur" icon="🏢" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Nom propriétaire" value={g('nom_proprietaire')} onChange={v=>u('nom_proprietaire',v)} required />
+                <F label="Entreprise" value={g('entreprise_proprietaire')} onChange={v=>u('entreprise_proprietaire',v)} />
+                <F label="Téléphone" value={g('telephone_proprietaire')} onChange={v=>u('telephone_proprietaire',v)} required />
+                <F label="Email" value={g('email_proprietaire')} onChange={v=>u('email_proprietaire',v)} type="email" />
+                <F label="RCCM" value={g('rccm')} onChange={v=>u('rccm',v)} mono />
+                <F label="IFU" value={g('ifu')} onChange={v=>u('ifu',v)} mono />
+              </div>
+              <F label="Adresse" value={g('adresse_proprietaire')} onChange={v=>u('adresse_proprietaire',v)} />
+            </Section>
+            <Section title="Locataire" icon="👤" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Nom locataire" value={g('nom_locataire')} onChange={v=>u('nom_locataire',v)} required />
+                <F label="Téléphone" value={g('telephone_locataire')} onChange={v=>u('telephone_locataire',v)} required />
+                <F label="Email" value={g('email_locataire')} onChange={v=>u('email_locataire',v)} type="email" />
+                <F label="Pièce d'identité" value={g('piece_identite')} onChange={v=>u('piece_identite',v)} />
+              </div>
+              <F label="Adresse locataire" value={g('adresse_locataire')} onChange={v=>u('adresse_locataire',v)} />
+            </Section>
+            <Section title="Bien immobilier" icon="🏠" color={info.color} defaultOpen={false}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Type logement" value={g('type_logement')} onChange={v=>u('type_logement',v)} placeholder="Appartement, Villa..." />
+                <F label="N° Appartement" value={g('numero_appartement')} onChange={v=>u('numero_appartement',v)} />
+                <F label="Ville" value={g('ville')} onChange={v=>u('ville',v)} />
+                <F label="Pays" value={g('pays')} onChange={v=>u('pays',v)} placeholder="Bénin" />
+              </div>
+              <F label="Adresse du bien" value={g('adresse_bien')} onChange={v=>u('adresse_bien',v)} required />
+            </Section>
+            <Section title="Paiement" icon="💰" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="N° Quittance" value={g('numero')} onChange={v=>u('numero',v)} mono required />
+                <F label="Date émission" value={g('date_emission')} onChange={v=>u('date_emission',v)} type="date" required />
+                <F label="Période concernée" value={g('periode_concernee')} onChange={v=>u('periode_concernee',v)} placeholder="Juin 2026" required />
+                <F label="Mois payé" value={g('mois_paye')} onChange={v=>u('mois_paye',v)} placeholder="Juin" />
+                <F label="Montant loyer" value={gn('montant_loyer')} onChange={v=>u('montant_loyer',v)} type="number" required />
+                <F label="Charges locatives" value={gn('charges_locatives')} onChange={v=>u('charges_locatives',v)} type="number" />
+                <F label="Caution" value={gn('caution')} onChange={v=>u('caution',v)} type="number" />
+                <F label="Avance" value={gn('avance')} onChange={v=>u('avance',v)} type="number" />
+                <F label="Taxes" value={gn('taxes')} onChange={v=>u('taxes',v)} type="number" />
+                <F label="Remise" value={gn('remise')} onChange={v=>u('remise',v)} type="number" />
+                <F label="Montant payé" value={gn('montant_paye')} onChange={v=>u('montant_paye',v)} type="number" required />
+                <F label="Mode paiement" value={g('mode_paiement')} onChange={v=>u('mode_paiement',v)} />
+              </div>
+              <F label="Réf. transaction" value={g('reference_transaction')} onChange={v=>u('reference_transaction',v)} mono />
+            </Section>
+          </>)}
+
+          {/* ═══ SERVICE ═══ */}
+          {type === 'service' && (<>
+            <Section title="Prestataire" icon="🏢" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Nom entreprise" value={g('nom_entreprise')} onChange={v=>u('nom_entreprise',v)} required />
+                <F label="Téléphone" value={g('telephone')} onChange={v=>u('telephone',v)} required />
+                <F label="Email" value={g('email')} onChange={v=>u('email',v)} type="email" />
+                <F label="Site web" value={g('site_web')} onChange={v=>u('site_web',v)} />
+                <F label="RCCM" value={g('rccm')} onChange={v=>u('rccm',v)} mono />
+                <F label="IFU" value={g('ifu')} onChange={v=>u('ifu',v)} mono />
+              </div>
+              <F label="Adresse" value={g('adresse')} onChange={v=>u('adresse',v)} />
+            </Section>
+            <Section title="Client" icon="👤" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Nom client" value={g('nom_client')} onChange={v=>u('nom_client',v)} required />
+                <F label="Entreprise client" value={g('entreprise_client')} onChange={v=>u('entreprise_client',v)} />
+                <F label="Téléphone" value={g('telephone_client')} onChange={v=>u('telephone_client',v)} />
+                <F label="Email" value={g('email_client')} onChange={v=>u('email_client',v)} type="email" />
+              </div>
+              <F label="Adresse client" value={g('adresse_client')} onChange={v=>u('adresse_client',v)} />
+            </Section>
+            <Section title="Prestation & Paiement" icon="💰" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="N° Quittance" value={g('numero')} onChange={v=>u('numero',v)} mono required />
+                <F label="Type service" value={g('type_service')} onChange={v=>u('type_service',v)} required placeholder="Nettoyage, Dev web..." />
+                <F label="Date prestation" value={g('date_prestation')} onChange={v=>u('date_prestation',v)} type="date" />
+                <F label="Durée" value={g('duree_prestation')} onChange={v=>u('duree_prestation',v)} placeholder="3 jours" />
+                <F label="Quantité" value={gn('quantite')||1} onChange={v=>u('quantite',v)} type="number" />
+                <F label="Prix unitaire" value={gn('prix_unitaire')} onChange={v=>u('prix_unitaire',v)} type="number" required />
+                <F label="Taxes" value={gn('taxes')} onChange={v=>u('taxes',v)} type="number" />
+                <F label="Remise" value={gn('remise')} onChange={v=>u('remise',v)} type="number" />
+                <F label="Montant payé" value={gn('montant_paye')} onChange={v=>u('montant_paye',v)} type="number" required />
+                <F label="Mode paiement" value={g('mode_paiement')} onChange={v=>u('mode_paiement',v)} />
+              </div>
+              <F label="Description service" value={g('description_service')} onChange={v=>u('description_service',v)} />
+              <F label="Réf. paiement" value={g('reference_paiement')} onChange={v=>u('reference_paiement',v)} mono />
+            </Section>
+          </>)}
+
+          {/* ═══ TRANSPORT ═══ */}
+          {type === 'transport' && (<>
+            <Section title="Société de transport" icon="🏢" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Nom société" value={g('nom_societe')} onChange={v=>u('nom_societe',v)} required />
+                <F label="Téléphone" value={g('telephone')} onChange={v=>u('telephone',v)} />
+                <F label="RCCM" value={g('rccm')} onChange={v=>u('rccm',v)} mono />
+                <F label="IFU" value={g('ifu')} onChange={v=>u('ifu',v)} mono />
+              </div>
+              <F label="Adresse" value={g('adresse')} onChange={v=>u('adresse',v)} />
+            </Section>
+            <Section title="Expéditeur" icon="📦" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Nom expéditeur" value={g('nom_expediteur')} onChange={v=>u('nom_expediteur',v)} required />
+                <F label="Téléphone" value={g('telephone_expediteur')} onChange={v=>u('telephone_expediteur',v)} />
+              </div>
+              <F label="Adresse expéditeur" value={g('adresse_expediteur')} onChange={v=>u('adresse_expediteur',v)} />
+            </Section>
+            <Section title="Destinataire" icon="📬" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Nom destinataire" value={g('nom_destinataire')} onChange={v=>u('nom_destinataire',v)} required />
+                <F label="Téléphone" value={g('telephone_destinataire')} onChange={v=>u('telephone_destinataire',v)} />
+              </div>
+              <F label="Adresse destinataire" value={g('adresse_destinataire')} onChange={v=>u('adresse_destinataire',v)} />
+            </Section>
+            <Section title="Transport & Paiement" icon="💰" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="N° Quittance" value={g('numero')} onChange={v=>u('numero',v)} mono required />
+                <F label="Type marchandise" value={g('type_marchandise')} onChange={v=>u('type_marchandise',v)} />
+                <F label="Ville départ" value={g('ville_depart')} onChange={v=>u('ville_depart',v)} required />
+                <F label="Ville arrivée" value={g('ville_arrivee')} onChange={v=>u('ville_arrivee',v)} required />
+                <F label="Poids" value={g('poids')} onChange={v=>u('poids',v)} placeholder="25 kg" />
+                <F label="Nombre colis" value={g('nombre_colis')} onChange={v=>u('nombre_colis',v)} />
+                <F label="N° véhicule" value={g('numero_vehicule')} onChange={v=>u('numero_vehicule',v)} />
+                <F label="Chauffeur" value={g('chauffeur')} onChange={v=>u('chauffeur',v)} />
+                <F label="Date expédition" value={g('date_expedition')} onChange={v=>u('date_expedition',v)} type="date" />
+                <F label="Date livraison" value={g('date_livraison')} onChange={v=>u('date_livraison',v)} type="date" />
+                <F label="Frais transport" value={gn('frais_transport')} onChange={v=>u('frais_transport',v)} type="number" required />
+                <F label="Assurance" value={gn('assurance')} onChange={v=>u('assurance',v)} type="number" />
+                <F label="Taxes" value={gn('taxes')} onChange={v=>u('taxes',v)} type="number" />
+                <F label="Montant payé" value={gn('montant_paye')} onChange={v=>u('montant_paye',v)} type="number" required />
+              </div>
+              <F label="Description colis" value={g('description_colis')} onChange={v=>u('description_colis',v)} />
+              <F label="Mode paiement" value={g('mode_paiement')} onChange={v=>u('mode_paiement',v)} />
+            </Section>
+          </>)}
+
+          {/* ═══ EDUCATION ═══ */}
+          {type === 'education' && (<>
+            <Section title="Établissement" icon="🏫" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Nom établissement" value={g('nom_etablissement')} onChange={v=>u('nom_etablissement',v)} required />
+                <F label="Autorisation" value={g('autorisation')} onChange={v=>u('autorisation',v)} />
+                <F label="Téléphone" value={g('telephone')} onChange={v=>u('telephone',v)} />
+                <F label="Email" value={g('email')} onChange={v=>u('email',v)} type="email" />
+                <F label="RCCM" value={g('rccm')} onChange={v=>u('rccm',v)} mono />
+                <F label="IFU" value={g('ifu')} onChange={v=>u('ifu',v)} mono />
+              </div>
+              <F label="Adresse" value={g('adresse')} onChange={v=>u('adresse',v)} />
+            </Section>
+            <Section title="Étudiant / Élève" icon="🎓" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Nom étudiant" value={g('nom_etudiant')} onChange={v=>u('nom_etudiant',v)} required />
+                <F label="Matricule" value={g('matricule')} onChange={v=>u('matricule',v)} mono />
+                <F label="Classe" value={g('classe')} onChange={v=>u('classe',v)} required />
+                <F label="Filière" value={g('filiere')} onChange={v=>u('filiere',v)} />
+                <F label="Niveau" value={g('niveau')} onChange={v=>u('niveau',v)} />
+                <F label="Tél. parent/tuteur" value={g('telephone_parent')} onChange={v=>u('telephone_parent',v)} />
+              </div>
+              <F label="Adresse étudiant" value={g('adresse_etudiant')} onChange={v=>u('adresse_etudiant',v)} />
+            </Section>
+            <Section title="Frais & Paiement" icon="💰" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="N° Quittance" value={g('numero')} onChange={v=>u('numero',v)} mono required />
+                <F label="Année scolaire" value={g('annee_scolaire')} onChange={v=>u('annee_scolaire',v)} placeholder="2025-2026" required />
+                <F label="Trimestre" value={g('trimestre')} onChange={v=>u('trimestre',v)} placeholder="1er, 2ème, 3ème" />
+                <F label="Type frais" value={g('type_frais')} onChange={v=>u('type_frais',v)} placeholder="Scolarité, Inscription..." />
+                <F label="Montant frais" value={gn('montant_frais')} onChange={v=>u('montant_frais',v)} type="number" required />
+                <F label="Réduction" value={gn('reduction')} onChange={v=>u('reduction',v)} type="number" />
+                <F label="Bourse" value={gn('bourse')} onChange={v=>u('bourse',v)} type="number" />
+                <F label="Taxes" value={gn('taxes')} onChange={v=>u('taxes',v)} type="number" />
+                <F label="Montant payé" value={gn('montant_paye')} onChange={v=>u('montant_paye',v)} type="number" required />
+                <F label="Date paiement" value={g('date_paiement')||g('date_emission')} onChange={v=>u('date_paiement',v)} type="date" />
+              </div>
+              <F label="Mode paiement" value={g('mode_paiement')} onChange={v=>u('mode_paiement',v)} />
+            </Section>
+          </>)}
+
+          {/* ═══ SANTÉ ═══ */}
+          {type === 'sante' && (<>
+            <Section title="Établissement de santé" icon="🏥" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Nom clinique/hôpital" value={g('nom_clinique')} onChange={v=>u('nom_clinique',v)} required />
+                <F label="Téléphone" value={g('telephone')} onChange={v=>u('telephone',v)} />
+                <F label="Email" value={g('email')} onChange={v=>u('email',v)} type="email" />
+                <F label="RCCM" value={g('rccm')} onChange={v=>u('rccm',v)} mono />
+                <F label="IFU" value={g('ifu')} onChange={v=>u('ifu',v)} mono />
+              </div>
+              <F label="Adresse" value={g('adresse')} onChange={v=>u('adresse',v)} />
+            </Section>
+            <Section title="Patient" icon="🩺" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Nom patient" value={g('nom_patient')} onChange={v=>u('nom_patient',v)} required />
+                <F label="Sexe" value={g('sexe')} onChange={v=>u('sexe',v)} placeholder="M / F" />
+                <F label="Date naissance" value={g('date_naissance')} onChange={v=>u('date_naissance',v)} type="date" />
+                <F label="Téléphone" value={g('telephone_patient')} onChange={v=>u('telephone_patient',v)} />
+                <F label="N° Dossier" value={g('numero_dossier')} onChange={v=>u('numero_dossier',v)} mono />
+                <F label="Assurance santé" value={g('assurance_sante')} onChange={v=>u('assurance_sante',v)} />
+              </div>
+              <F label="Adresse patient" value={g('adresse_patient')} onChange={v=>u('adresse_patient',v)} />
+            </Section>
+            <Section title="Soins & Paiement" icon="💰" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="N° Quittance" value={g('numero')} onChange={v=>u('numero',v)} mono required />
+                <F label="Médecin" value={g('medecin')} onChange={v=>u('medecin',v)} required />
+                <F label="Service médical" value={g('service_medical')} onChange={v=>u('service_medical',v)} />
+                <F label="Date consultation" value={g('date_consultation')||g('date_emission')} onChange={v=>u('date_consultation',v)} type="date" />
+                <F label="Type prestation" value={g('type_prestation')} onChange={v=>u('type_prestation',v)} placeholder="Consultation, Chirurgie..." />
+                <F label="Coût consultation" value={gn('cout_consultation')} onChange={v=>u('cout_consultation',v)} type="number" />
+                <F label="Frais examens" value={gn('frais_examens')} onChange={v=>u('frais_examens',v)} type="number" />
+                <F label="Frais médicaments" value={gn('frais_medicaments')} onChange={v=>u('frais_medicaments',v)} type="number" />
+                <F label="Réduction" value={gn('reduction')} onChange={v=>u('reduction',v)} type="number" />
+                <F label="Taxes" value={gn('taxes')} onChange={v=>u('taxes',v)} type="number" />
+                <F label="Montant payé" value={gn('montant_paye')} onChange={v=>u('montant_paye',v)} type="number" required />
+                <F label="Mode paiement" value={g('mode_paiement')} onChange={v=>u('mode_paiement',v)} />
+              </div>
+              <F label="Médicaments prescrits" value={g('medicaments')} onChange={v=>u('medicaments',v)} />
+              <F label="Examens effectués" value={g('examens')} onChange={v=>u('examens',v)} />
+            </Section>
+          </>)}
+
+          {/* ═══ GÉNÉRAL ═══ */}
+          {type === 'general' && (<>
+            <Section title="Entreprise" icon="🏢" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Nom entreprise" value={g('nom_entreprise')} onChange={v=>u('nom_entreprise',v)} required />
+                <F label="Téléphone" value={g('telephone')} onChange={v=>u('telephone',v)} />
+                <F label="Email" value={g('email')} onChange={v=>u('email',v)} type="email" />
+                <F label="RCCM" value={g('rccm')} onChange={v=>u('rccm',v)} mono />
+                <F label="IFU" value={g('ifu')} onChange={v=>u('ifu',v)} mono />
+              </div>
+              <F label="Adresse" value={g('adresse')} onChange={v=>u('adresse',v)} />
+            </Section>
+            <Section title="Client" icon="👤" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Nom client" value={g('nom_client')} onChange={v=>u('nom_client',v)} required />
+                <F label="Téléphone" value={g('telephone_client')} onChange={v=>u('telephone_client',v)} />
+                <F label="Email" value={g('email_client')} onChange={v=>u('email_client',v)} type="email" />
+              </div>
+              <F label="Adresse client" value={g('adresse_client')} onChange={v=>u('adresse_client',v)} />
+            </Section>
+            <Section title="Transaction & Paiement" icon="💰" color={info.color}>
+              <div className="grid grid-cols-2 gap-3">
+                <F label="N° Quittance" value={g('numero')} onChange={v=>u('numero',v)} mono required />
+                <F label="Objet paiement" value={g('objet_paiement')} onChange={v=>u('objet_paiement',v)} required />
+                <F label="Quantité" value={gn('quantite')||1} onChange={v=>u('quantite',v)} type="number" />
+                <F label="Prix unitaire" value={gn('prix_unitaire')} onChange={v=>u('prix_unitaire',v)} type="number" required />
+                <F label="Taxes" value={gn('taxes')} onChange={v=>u('taxes',v)} type="number" />
+                <F label="Remise" value={gn('remise')} onChange={v=>u('remise',v)} type="number" />
+                <F label="Montant payé" value={gn('montant_paye')} onChange={v=>u('montant_paye',v)} type="number" required />
+                <F label="Date paiement" value={g('date_emission')} onChange={v=>u('date_emission',v)} type="date" />
+              </div>
+              <F label="Description" value={g('description')} onChange={v=>u('description',v)} />
+              <F label="Mode paiement" value={g('mode_paiement')} onChange={v=>u('mode_paiement',v)} />
+              <F label="Réf. transaction" value={g('reference_transaction')} onChange={v=>u('reference_transaction',v)} mono />
+              <F label="Mention légale" value={g('mention_legale')} onChange={v=>u('mention_legale',v)} />
+            </Section>
+          </>)}
+
+          {/* Cachet & Signature — tous types */}
+          <Section title="Validation (Cachet & Signature)" icon="✅" color={info.color} defaultOpen={false}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Cachet */}
+              <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <span className="text-xs font-bold text-slate-700">Cachet / Tampon</span>
+                {stampUrl ? <div className="flex items-center space-x-2"><img src={stampUrl} className="w-14 h-14 object-contain bg-white rounded border p-1" /><button onClick={()=>setStampUrl('')} className="text-[10px] text-rose-500 font-bold">✕</button></div> : (
+                  <div className="space-y-2">
+                    <input type="text" value={stampTextInput} onChange={e=>setStampTextInput(e.target.value)} placeholder="PAYÉ"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <div className="flex flex-wrap gap-1">
+                      {STAMP_STYLES.map(s=>(
+                        <button key={s.id} onClick={()=>setStampStyleSel(s.id)}
+                          className={`px-1.5 py-0.5 rounded text-[8px] font-bold border ${stampStyleSel===s.id?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-500 border-slate-200'}`}>{s.label}</button>
+                      ))}
+                    </div>
+                    <div className="flex space-x-1">
+                      {STAMP_COLORS.map(cl=>(
+                        <button key={cl} onClick={()=>setStampColorSel(cl)}
+                          className={`w-4 h-4 rounded-full border ${stampColorSel===cl?'ring-2 ring-offset-1 ring-slate-900':'border-slate-300'}`} style={{backgroundColor:cl}} />
+                      ))}
+                    </div>
+                    <button onClick={()=>{setStampUrl(generateStamp(stampTextInput||'PAYÉ',stampStyleSel,stampColorSel));onTriggerToast('Cachet généré !','success');}}
+                      className="w-full bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold py-1.5 rounded-lg shadow-sm">✓ Générer ce cachet</button>
+                  </div>
+                )}
+                {stampUrl && <>
+                  <div className="flex items-center justify-between text-[9px] text-slate-500"><span>Taille {Math.round(stampScale*100)}%</span></div>
+                  <input type="range" min="30" max="250" value={stampScale*100} onChange={e=>setStampScale(parseInt(e.target.value)/100)} className="w-full h-1 accent-blue-600" />
+                  <div className="flex items-center justify-between text-[9px] text-slate-500"><span>Rotation {stampRot}°</span></div>
+                  <input type="range" min="-180" max="180" value={stampRot} onChange={e=>setStampRot(parseInt(e.target.value))} className="w-full h-1 accent-blue-600" />
+                  <div className="flex space-x-1 pt-1">
+                    {STAMP_COLORS.map(cl => (
+                      <button key={cl} onClick={async()=>{onTriggerToast('Colorisation...','info');setStampUrl(await colorizeImg(stampUrl,cl));onTriggerToast('Couleur !','success');}}
+                        className="w-4 h-4 rounded-full border border-slate-300 hover:scale-125 transition-transform" style={{backgroundColor:cl}} />
+                    ))}
+                  </div>
+                </>}
+                <label className="w-full bg-white hover:bg-slate-100 text-slate-600 text-[10px] font-bold py-1.5 rounded-lg border border-slate-200 flex items-center justify-center space-x-1 cursor-pointer">
+                  <Upload className="w-3 h-3" /><span>Importer un tampon</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={async e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=async ev=>{setStampUrl(await removeBg(ev.target?.result as string));onTriggerToast('Cachet importé !','success');};r.readAsDataURL(f);}} />
+                </label>
+              </div>
+
+              {/* Signature */}
+              <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <span className="text-xs font-bold text-slate-700">Signature</span>
+                {signUrl ? <div className="flex items-center space-x-2"><img src={signUrl} className="w-20 h-12 object-contain bg-white rounded border p-1" /><button onClick={()=>setSignUrl('')} className="text-[10px] text-rose-500 font-bold">✕</button></div> : <p className="text-[10px] text-slate-400">Aucune signature</p>}
+                {signUrl && <>
+                  <div className="flex items-center justify-between text-[9px] text-slate-500"><span>Taille {Math.round(signScale*100)}%</span></div>
+                  <input type="range" min="30" max="250" value={signScale*100} onChange={e=>setSignScale(parseInt(e.target.value)/100)} className="w-full h-1 accent-blue-600" />
+                  <div className="flex items-center justify-between text-[9px] text-slate-500"><span>Rotation {signRot}°</span></div>
+                  <input type="range" min="-180" max="180" value={signRot} onChange={e=>setSignRot(parseInt(e.target.value))} className="w-full h-1 accent-blue-600" />
+                  <div className="flex space-x-1 pt-1">
+                    {STAMP_COLORS.map(cl => (
+                      <button key={cl} onClick={async()=>{onTriggerToast('Colorisation...','info');setSignUrl(await colorizeImg(signUrl,cl));onTriggerToast('Couleur !','success');}}
+                        className="w-4 h-4 rounded-full border border-slate-300 hover:scale-125 transition-transform" style={{backgroundColor:cl}} />
+                    ))}
+                  </div>
+                </>}
+                {/* Signature manuelle */}
+                <div className="border border-dashed border-slate-300 rounded-lg overflow-hidden bg-white relative">
+                  <canvas ref={signCanvasRef} width={300} height={100} className="w-full cursor-crosshair touch-none"
+                    onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+                    onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw} />
+                  {!hasDrawn && !signUrl && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><span className="text-slate-300 text-[10px]">✍️ Signez ici</span></div>}
+                </div>
+                <div className="flex space-x-2">
+                  <button onClick={clearCanvas} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold py-1.5 rounded-lg border border-slate-200">Effacer</button>
+                  <button onClick={saveCanvasSign} disabled={!hasDrawn} className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-[10px] font-bold py-1.5 rounded-lg shadow-sm">Enregistrer</button>
+                </div>
+                <label className="w-full bg-white hover:bg-slate-100 text-slate-600 text-[10px] font-bold py-1.5 rounded-lg border border-slate-200 flex items-center justify-center space-x-1 cursor-pointer">
+                  <Upload className="w-3 h-3" /><span>Ou importer une image</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={async e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=async ev=>{setSignUrl(await removeBg(ev.target?.result as string));onTriggerToast('Signature importée !','success');};r.readAsDataURL(f);}} />
+                </label>
+              </div>
+            </div>
+          </Section>
+        </div>
+
+        {/* RIGHT: LIVE PREVIEW */}
+        <div className="lg:col-span-5">
+          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-xl sticky top-20">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+              <span className="text-xs font-bold text-white flex items-center space-x-1.5"><Sparkles className="w-4 h-4 text-blue-400" /><span>Aperçu</span></span>
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded text-white" style={{backgroundColor:tplColor}}>{info.label}</span>
+            </div>
+            <div ref={previewRef} className="bg-white rounded-lg p-5 text-slate-900 text-[10px] font-sans shadow-lg relative" style={{minHeight:'450px'}}
+              onMouseMove={(e)=>{if(!dragging||!previewRef.current)return;const r=previewRef.current.getBoundingClientRect();const x=Math.max(5,Math.min(95,((e.clientX-r.left)/r.width)*100));const y=Math.max(5,Math.min(95,((e.clientY-r.top)/r.height)*100));dragging==='stamp'?setStampPos({x,y}):setSignPos({x,y});}}
+              onMouseUp={()=>setDragging(null)} onMouseLeave={()=>setDragging(null)}
+              onTouchMove={(e)=>{if(!dragging||!previewRef.current)return;const r=previewRef.current.getBoundingClientRect();const x=Math.max(5,Math.min(95,((e.touches[0].clientX-r.left)/r.width)*100));const y=Math.max(5,Math.min(95,((e.touches[0].clientY-r.top)/r.height)*100));dragging==='stamp'?setStampPos({x,y}):setSignPos({x,y});}}
+              onTouchEnd={()=>setDragging(null)}>
+              {/* Header: QR | Title | Logo */}
+              <table style={{width:'100%',marginBottom:'10px',borderBottom:`3px solid ${info.color}`,paddingBottom:'8px'}} cellPadding={0} cellSpacing={0}>
+                <tbody><tr>
+                  <td style={{width:'50px',verticalAlign:'middle',textAlign:'left'}}>
+                    <img src={qrDataUrl} alt="QR" style={{width:'45px',height:'45px'}} />
+                  </td>
+                  <td style={{textAlign:'center',verticalAlign:'middle',padding:'0 6px'}}>
+                    <div style={{fontSize:'13px',fontWeight:900,textTransform:'uppercase',letterSpacing:'1px',color:info.color}}>{info.label}</div>
+                    <div style={{fontSize:'9px',color:'#64748b',marginTop:'2px'}}>N° <strong>{g('numero')}</strong> — {g('date_emission')}</div>
+                  </td>
+                  <td style={{width:'50px',verticalAlign:'middle',textAlign:'right'}}>
+                    {logoUrl ? <img src={logoUrl} alt="Logo" style={{width:'45px',height:'45px',objectFit:'contain',borderRadius:'6px'}} /> : <div style={{width:'45px',height:'45px'}} />}
+                  </td>
+                </tr></tbody>
+              </table>
+
+              {/* ═══ PARTIES: Émetteur / Bénéficiaire ═══ */}
+              <div className="grid grid-cols-2 gap-2 mb-3 p-2.5 rounded-lg border text-[9px]" style={{borderColor:info.color+'40',backgroundColor:info.color+'06'}}>
+                <div>
+                  <p className="font-black uppercase text-[7px] mb-1 tracking-wider" style={{color:info.color}}>
+                    {type==='loyer'?'BAILLEUR / PROPRIÉTAIRE':type==='sante'?'ÉTABLISSEMENT DE SANTÉ':type==='transport'?'SOCIÉTÉ DE TRANSPORT':type==='education'?'ÉTABLISSEMENT':'ÉMETTEUR'}
+                  </p>
+                  <p className="font-bold text-slate-900 text-[10px]">{g('nom_proprietaire')||g('nom_entreprise')||g('nom_societe')||g('nom_etablissement')||g('nom_clinique')||'_______________'}</p>
+                  {g('entreprise_proprietaire') && <p className="text-slate-600">{g('entreprise_proprietaire')}</p>}
+                  {(g('adresse_proprietaire')||g('adresse')) && <p className="text-slate-500">{g('adresse_proprietaire')||g('adresse')}</p>}
+                  {(g('telephone_proprietaire')||g('telephone')) && <p className="text-slate-500">Tél: {g('telephone_proprietaire')||g('telephone')}</p>}
+                  {(g('email_proprietaire')||g('email')) && <p className="text-slate-400">{g('email_proprietaire')||g('email')}</p>}
+                  {g('rccm') && <p className="text-slate-400 font-mono text-[8px]">RCCM: {g('rccm')}</p>}
+                  {g('ifu') && <p className="text-slate-400 font-mono text-[8px]">IFU: {g('ifu')}</p>}
+                </div>
+                <div>
+                  <p className="font-black uppercase text-[7px] mb-1 tracking-wider" style={{color:info.color}}>
+                    {type==='loyer'?'LOCATAIRE':type==='education'?'ÉLÈVE / PARENT':type==='sante'?'PATIENT':type==='transport'?'EXPÉDITEUR':'CLIENT'}
+                  </p>
+                  <p className="font-bold text-slate-900 text-[10px]">{g('nom_locataire')||g('nom_client')||g('nom_expediteur')||g('nom_etudiant')||g('nom_patient')||'_______________'}</p>
+                  {g('entreprise_client') && <p className="text-slate-600">{g('entreprise_client')}</p>}
+                  {(g('adresse_locataire')||g('adresse_client')||g('adresse_expediteur')||g('adresse_etudiant')||g('adresse_patient')) && <p className="text-slate-500">{g('adresse_locataire')||g('adresse_client')||g('adresse_expediteur')||g('adresse_etudiant')||g('adresse_patient')}</p>}
+                  {(g('telephone_locataire')||g('telephone_client')||g('telephone_expediteur')||g('telephone_parent')||g('telephone_patient')) && <p className="text-slate-500">Tél: {g('telephone_locataire')||g('telephone_client')||g('telephone_expediteur')||g('telephone_parent')||g('telephone_patient')}</p>}
+                  {(g('email_locataire')||g('email_client')) && <p className="text-slate-400">{g('email_locataire')||g('email_client')}</p>}
+                  {g('piece_identite') && <p className="text-slate-400 text-[8px]">ID: {g('piece_identite')}</p>}
+                </div>
+              </div>
+
+              {/* ═══ DÉTAILS SPÉCIFIQUES ═══ */}
+              {type==='loyer' && (
+                <div className="mb-3 p-2.5 rounded-lg border text-[9px] space-y-1" style={{backgroundColor:info.color+'08',borderColor:info.color+'30'}}>
+                  <p className="font-black uppercase text-[7px] tracking-wider" style={{color:info.color}}>BIEN IMMOBILIER & PÉRIODE</p>
+                  {g('adresse_bien') && <p>📍 <strong>Bien:</strong> {g('adresse_bien')}</p>}
+                  {g('type_logement') && <p>🏠 <strong>Type:</strong> {g('type_logement')} {g('numero_appartement') ? `N°${g('numero_appartement')}` : ''}</p>}
+                  {g('ville') && <p>🌍 <strong>Ville:</strong> {g('ville')} {g('pays') ? `— ${g('pays')}` : ''}</p>}
+                  {g('periode_concernee') && <p>📅 <strong>Période:</strong> {g('periode_concernee')} {g('mois_paye') ? `(${g('mois_paye')})` : ''}</p>}
+                </div>
+              )}
+              {type==='service' && (
+                <div className="mb-3 p-2.5 rounded-lg border text-[9px] space-y-1" style={{backgroundColor:info.color+'08',borderColor:info.color+'30'}}>
+                  <p className="font-black uppercase text-[7px] tracking-wider" style={{color:info.color}}>DÉTAILS DE LA PRESTATION</p>
+                  {g('type_service') && <p>🔧 <strong>Service:</strong> {g('type_service')}</p>}
+                  {g('description_service') && <p>📝 <strong>Description:</strong> {g('description_service')}</p>}
+                  {g('date_prestation') && <p>📅 <strong>Date:</strong> {g('date_prestation')}</p>}
+                  {g('duree_prestation') && <p>⏱️ <strong>Durée:</strong> {g('duree_prestation')}</p>}
+                  {gn('quantite')>0 && <p>📦 <strong>Quantité:</strong> {gn('quantite')} × {fmt(gn('prix_unitaire'))}</p>}
+                </div>
+              )}
+              {type==='transport' && (
+                <div className="mb-3 p-2.5 rounded-lg border text-[9px] space-y-1" style={{backgroundColor:info.color+'08',borderColor:info.color+'30'}}>
+                  <p className="font-black uppercase text-[7px] tracking-wider" style={{color:info.color}}>DÉTAILS DU TRANSPORT</p>
+                  {(g('ville_depart')||g('ville_arrivee')) && <p>🚚 <strong>Trajet:</strong> {g('ville_depart')||'___'} → {g('ville_arrivee')||'___'}</p>}
+                  {g('type_marchandise') && <p>📦 <strong>Marchandise:</strong> {g('type_marchandise')}</p>}
+                  {g('description_colis') && <p>📝 <strong>Colis:</strong> {g('description_colis')}</p>}
+                  {g('poids') && <p>⚖️ <strong>Poids:</strong> {g('poids')}</p>}
+                  {g('nombre_colis') && <p>📦 <strong>Nombre:</strong> {g('nombre_colis')} colis</p>}
+                  {g('numero_vehicule') && <p>🚗 <strong>Véhicule:</strong> {g('numero_vehicule')}</p>}
+                  {g('chauffeur') && <p>👤 <strong>Chauffeur:</strong> {g('chauffeur')}</p>}
+                  {g('date_expedition') && <p>📅 <strong>Expédition:</strong> {g('date_expedition')}</p>}
+                  {g('date_livraison') && <p>📅 <strong>Livraison:</strong> {g('date_livraison')}</p>}
+                  {/* Destinataire */}
+                  {g('nom_destinataire') && <div className="mt-1.5 pt-1.5 border-t" style={{borderColor:info.color+'30'}}>
+                    <p className="font-bold" style={{color:info.color}}>Destinataire:</p>
+                    <p>👤 {g('nom_destinataire')} {g('telephone_destinataire') ? `— Tél: ${g('telephone_destinataire')}` : ''}</p>
+                    {g('adresse_destinataire') && <p>📍 {g('adresse_destinataire')}</p>}
+                  </div>}
+                </div>
+              )}
+              {type==='education' && (
+                <div className="mb-3 p-2.5 rounded-lg border text-[9px] space-y-1" style={{backgroundColor:info.color+'08',borderColor:info.color+'30'}}>
+                  <p className="font-black uppercase text-[7px] tracking-wider" style={{color:info.color}}>INFORMATIONS SCOLAIRES</p>
+                  {g('nom_etudiant') && <p>🎓 <strong>Élève:</strong> {g('nom_etudiant')}</p>}
+                  {g('matricule') && <p>🔢 <strong>Matricule:</strong> {g('matricule')}</p>}
+                  {g('classe') && <p>📚 <strong>Classe:</strong> {g('classe')} {g('filiere') ? `— ${g('filiere')}` : ''} {g('niveau') ? `(${g('niveau')})` : ''}</p>}
+                  {g('annee_scolaire') && <p>📅 <strong>Année:</strong> {g('annee_scolaire')}</p>}
+                  {g('trimestre') && <p>📆 <strong>Trimestre:</strong> {g('trimestre')}</p>}
+                  {g('type_frais') && <p>💰 <strong>Type frais:</strong> {g('type_frais')}</p>}
+                  {g('autorisation') && <p>📜 <strong>Autorisation:</strong> {g('autorisation')}</p>}
+                </div>
+              )}
+              {type==='sante' && (
+                <div className="mb-3 p-2.5 rounded-lg border text-[9px] space-y-1" style={{backgroundColor:info.color+'08',borderColor:info.color+'30'}}>
+                  <p className="font-black uppercase text-[7px] tracking-wider" style={{color:info.color}}>INFORMATIONS MÉDICALES</p>
+                  {g('nom_patient') && <p>🩺 <strong>Patient:</strong> {g('nom_patient')} {g('sexe') ? `(${g('sexe')})` : ''}</p>}
+                  {g('date_naissance') && <p>📅 <strong>Né(e) le:</strong> {g('date_naissance')}</p>}
+                  {g('numero_dossier') && <p>📁 <strong>Dossier:</strong> {g('numero_dossier')}</p>}
+                  {g('medecin') && <p>👨‍⚕️ <strong>Médecin:</strong> Dr. {g('medecin')}</p>}
+                  {g('service_medical') && <p>🏥 <strong>Service:</strong> {g('service_medical')}</p>}
+                  {g('date_consultation') && <p>📅 <strong>Consultation:</strong> {g('date_consultation')}</p>}
+                  {g('type_prestation') && <p>💊 <strong>Acte:</strong> {g('type_prestation')}</p>}
+                  {g('medicaments') && <p>💊 <strong>Médicaments:</strong> {g('medicaments')}</p>}
+                  {g('examens') && <p>🔬 <strong>Examens:</strong> {g('examens')}</p>}
+                  {g('assurance_sante') && <p>🛡️ <strong>Assurance:</strong> {g('assurance_sante')}</p>}
+                </div>
+              )}
+              {type==='general' && (g('objet_paiement')||g('description')) && (
+                <div className="mb-3 p-2.5 rounded-lg border text-[9px] space-y-1" style={{backgroundColor:info.color+'08',borderColor:info.color+'30'}}>
+                  <p className="font-black uppercase text-[7px] tracking-wider" style={{color:info.color}}>OBJET</p>
+                  {g('objet_paiement') && <p>📝 <strong>Objet:</strong> {g('objet_paiement')}</p>}
+                  {g('description') && <p>📋 <strong>Description:</strong> {g('description')}</p>}
+                  {gn('quantite')>0 && <p>📦 <strong>Quantité:</strong> {gn('quantite')} × {fmt(gn('prix_unitaire'))}</p>}
+                </div>
+              )}
+
+              {/* ═══ DÉTAIL FINANCIER ═══ */}
+              <div className="mb-3 p-2.5 border rounded-lg text-[9px]" style={{borderColor:info.color+'40'}}>
+                <p className="font-black uppercase text-[7px] tracking-wider mb-2" style={{color:info.color}}>DÉTAIL FINANCIER</p>
+                <div className="space-y-1">
+                  {type==='loyer' && <>
+                    {gn('montant_loyer')>0 && <div className="flex justify-between"><span>Loyer</span><span>{fmt(gn('montant_loyer'))}</span></div>}
+                    {gn('charges_locatives')>0 && <div className="flex justify-between"><span>Charges locatives</span><span>{fmt(gn('charges_locatives'))}</span></div>}
+                    {gn('caution')>0 && <div className="flex justify-between"><span>Caution</span><span>{fmt(gn('caution'))}</span></div>}
+                    {gn('avance')>0 && <div className="flex justify-between"><span>Avance</span><span>{fmt(gn('avance'))}</span></div>}
+                  </>}
+                  {type==='transport' && <>
+                    {gn('frais_transport')>0 && <div className="flex justify-between"><span>Frais transport</span><span>{fmt(gn('frais_transport'))}</span></div>}
+                    {gn('assurance')>0 && <div className="flex justify-between"><span>Assurance</span><span>{fmt(gn('assurance'))}</span></div>}
+                  </>}
+                  {type==='sante' && <>
+                    {gn('cout_consultation')>0 && <div className="flex justify-between"><span>Consultation</span><span>{fmt(gn('cout_consultation'))}</span></div>}
+                    {gn('frais_examens')>0 && <div className="flex justify-between"><span>Examens</span><span>{fmt(gn('frais_examens'))}</span></div>}
+                    {gn('frais_medicaments')>0 && <div className="flex justify-between"><span>Médicaments</span><span>{fmt(gn('frais_medicaments'))}</span></div>}
+                  </>}
+                  {(type==='service'||type==='general'||type==='education') && gn('prix_unitaire')>0 && <div className="flex justify-between"><span>{gn('quantite')>1?`${gn('quantite')} × ${fmt(gn('prix_unitaire'))}`:'Montant'}</span><span>{fmt((gn('quantite')||1)*gn('prix_unitaire'))}</span></div>}
+                  {type==='education' && gn('montant_frais')>0 && <div className="flex justify-between"><span>Frais {g('type_frais')}</span><span>{fmt(gn('montant_frais'))}</span></div>}
+                  {gn('taxes')>0 && <div className="flex justify-between text-slate-500"><span>Taxes</span><span>+{fmt(gn('taxes'))}</span></div>}
+                  {(gn('remise')>0||gn('reduction')>0) && <div className="flex justify-between text-emerald-600"><span>Remise/Réduction</span><span>-{fmt(gn('remise')||gn('reduction'))}</span></div>}
+                  {gn('bourse')>0 && <div className="flex justify-between text-emerald-600"><span>Bourse</span><span>-{fmt(gn('bourse'))}</span></div>}
+                </div>
+                <div className="flex justify-between mt-2 pt-2 font-black text-sm" style={{borderTop:`2px solid ${info.color}`,color:info.color}}>
+                  <span>TOTAL TTC</span><span>{fmt(total)}</span>
+                </div>
+                {gn('montant_paye')>0 && <div className="flex justify-between mt-1.5 text-[9px] bg-emerald-50 px-2 py-1 rounded"><span className="text-emerald-700 font-bold">Payé ({g('mode_paiement')||'—'})</span><strong className="text-emerald-700">{fmt(gn('montant_paye'))}</strong></div>}
+                {reliquat>0 && <div className="flex justify-between mt-1 text-[9px] bg-rose-50 px-2 py-1 rounded font-bold"><span className="text-rose-700">RESTE À PAYER</span><span className="text-rose-700">{fmt(reliquat)}</span></div>}
+                {g('reference_transaction')||g('reference_paiement') ? <p className="text-[8px] text-slate-400 mt-1">Réf: {g('reference_transaction')||g('reference_paiement')}</p> : null}
+              </div>
+
+              {/* ═══ MENTION LÉGALE ═══ */}
+              {g('mention_legale') && <p className="text-[8px] text-slate-400 italic mb-2">{g('mention_legale')}</p>}
+
+              {/* Draggable Stamp */}
+              {stampUrl && <img src={stampUrl} alt="Cachet"
+                onMouseDown={(e)=>{e.preventDefault();setDragging('stamp');}}
+                onTouchStart={(e)=>{e.preventDefault();setDragging('stamp');}}
+                draggable={false}
+                className={`absolute object-contain cursor-grab active:cursor-grabbing z-10 opacity-90 hover:opacity-100 ${dragging==='stamp'?'ring-2 ring-blue-500 ring-offset-1':''}`}
+                style={{left:`${stampPos.x}%`,top:`${stampPos.y}%`,width:`${55*stampScale}px`,height:`${55*stampScale}px`,transform:`translate(-50%,-50%) rotate(${stampRot}deg)`}} />}
+              {/* Draggable Signature */}
+              {signUrl && <img src={signUrl} alt="Signature"
+                onMouseDown={(e)=>{e.preventDefault();setDragging('sign');}}
+                onTouchStart={(e)=>{e.preventDefault();setDragging('sign');}}
+                draggable={false}
+                className={`absolute object-contain cursor-grab active:cursor-grabbing z-10 opacity-90 hover:opacity-100 ${dragging==='sign'?'ring-2 ring-blue-500 ring-offset-1':''}`}
+                style={{left:`${signPos.x}%`,top:`${signPos.y}%`,width:`${70*signScale}px`,height:`${40*signScale}px`,transform:`translate(-50%,-50%) rotate(${signRot}deg)`}} />}
+
+              <div className="mt-2 pt-2 border-t border-dashed border-slate-300 text-center text-[7px] text-slate-400">
+                <b>FACTUREset — Plateforme SaaS</b> · Contact: +2290166336546
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
