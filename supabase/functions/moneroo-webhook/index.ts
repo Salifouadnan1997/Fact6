@@ -2,10 +2,19 @@ import { serve } from "https://deno.land/std/http/server.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const WEBHOOK_SECRET = Deno.env.get("MONEROO_WEBHOOK_SECRET");
 
 serve(async (req) => {
   try {
+    const providedSecret = req.headers.get("x-webhook-secret");
+
+    if (!WEBHOOK_SECRET || providedSecret !== WEBHOOK_SECRET) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
     const body = await req.json();
+
+    console.log("EVENT RECEIVED:", JSON.stringify(body));
 
     const event = body?.event || body?.type;
     const data = body?.data;
@@ -26,6 +35,28 @@ serve(async (req) => {
 
     const transactionId = data.id;
     const amount = Number(data.amount || 0);
+
+    // Anti double paiement
+    const check = await fetch(
+      `${SUPABASE_URL}/rest/v1/payments?transaction_id=eq.${transactionId}&status=eq.paid`,
+      {
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        }
+      }
+    );
+
+    const already = await check.json();
+
+    if (already?.length > 0) {
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Already processed"
+      }), {
+        headers: { "Content-Type": "application/json" }
+      });
+    }
 
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/payments?transaction_id=eq.${transactionId}`,
