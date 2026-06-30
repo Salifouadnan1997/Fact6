@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+/* Smooth fade-in animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes toastIn {
+  0% { opacity: 0; transform: translateY(20px) scale(0.95); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes bellRing {
+  0%, 100% { transform: rotate(0deg); }
+  10% { transform: rotate(14deg); }
+  20% { transform: rotate(-12deg); }
+  30% { transform: rotate(10deg); }
+  40% { transform: rotate(-8deg); }
+  50% { transform: rotate(4deg); }
+  60% { transform: rotate(0deg); }
+}
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(59,130,246,0); }
+}
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.7); }
+}
+
+.animate-fadeIn { animation: fadeIn 0.35s ease-out both; }
+.animate-slideInRight { animation: slideInRight 0.3s ease-out both; }
+.animate-slideInLeft { animation: slideInLeft 0.3s ease-out both; }
+.animate-toastIn { animation: toastIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
+.animate-bellRing { animation: bellRing 1.5s ease-in-out; }
+.animate-pulseGlow { animation: pulseGlow 2s infinite; }
+.animate-dotPulse { animation: dotPulse 1.5s ease-in-out infinite; }
+
+/* Custom scrollbar for the main area */
+main::-webkit-scrollbar { width: 6px; }
+main::-webkit-scrollbar-track { background: #f1f5f9; }
+main::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+main::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Sidebar scrollbar */
+aside::-webkit-scrollbar { width: 4px; }
+aside::-webkit-scrollbar-track { background: transparent; }
+aside::-webkit-scrollbar-thumb { background: #334155; border-radius: 99px; }
+
+/* Select dropdown caret custom on dark backgrounds */
+select { -webkit-appearance: none; appearance: none; }
+
+/* Hide scrollbar for ticker */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Auto-scroll animation for ticker */
+@keyframes tickerScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-ticker { animation: tickerScroll 20s linear infinite; }
+.animate-ticker:hover { animation-play-state: paused; }
+
+/* Vertical ticker for header features */
+@keyframes tickerVertical {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-100%); }
+}
+.animate-ticker-vertical { animation: tickerVertical 30s linear infinite; }
