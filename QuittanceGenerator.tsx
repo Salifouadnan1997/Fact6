@@ -3,6 +3,7 @@ import { FileText, Download, Printer, Upload, Sparkles, ChevronDown, ChevronUp }
 import { Invoice } from './types';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { supabase } from './src/config/supabaseClient';
 
 const TYPES = [
   { id: 'loyer', label: '🏠 Quittance de Loyer', color: '#0d9488' },

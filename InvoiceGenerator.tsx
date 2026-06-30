@@ -1,3 +1,4 @@
+import { supabase } from './src/config/supabaseClient';
 import React, { useState } from 'react';
 import { 
   Receipt, 

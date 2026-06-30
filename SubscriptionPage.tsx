@@ -1,3 +1,4 @@
+import { supabase } from './src/config/supabaseClient';
 import { useState, useEffect } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { getCurrentPlan, activatePlan } from './payliv1';

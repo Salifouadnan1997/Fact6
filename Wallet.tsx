@@ -1,3 +1,4 @@
+import { supabase } from './src/config/supabaseClient';
 import { useState, useEffect } from 'react';
 import { Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft, RefreshCw, History, Globe, Search, Send, Loader2, AlertCircle } from 'lucide-react';
 
