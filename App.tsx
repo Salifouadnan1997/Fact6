@@ -83,7 +83,7 @@ function AppContent() {
     return <LandingPage />;
   }
 
-  console.log("DEBUG user.id =", user.id);
+  triggerToast("DEBUG user.id: " + user.id, "info");
   const authUser: AuthSession = {
     email: user.email || '',
     name: user.user_metadata.full_name || user.email || 'Utilisateur',
