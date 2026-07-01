@@ -90,7 +90,7 @@ const plans = [
   },
 ];
 
-export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ onTriggerToast, userEmail, userName }) => {
+export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ onTriggerToast, userEmail, userName, userId }) => {
   const [currentPlan, setCurrentPlan] = useState(getCurrentPlan());
   const [loading, setLoading] = useState<string | null>(null);
   const [paymentResult, setPaymentResult] = useState<'success' | 'cancel' | null>(null);
