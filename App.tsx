@@ -239,7 +239,7 @@ function AuthenticatedApp({ authUser, onLogout }: { authUser: AuthSession; onLog
             />
           )}
           {activeTab === 'quittance-generator' && (
-            <QuittanceGenerator currentInvoice={currentInvoice} userId={currentUser.id} onTriggerToast={triggerToast} />
+            <QuittanceGenerator currentInvoice={currentInvoice} userId={currentUser.id} onTriggerToast={triggerToast} onNavigateToTab={handleNavigateToTab} />
           )}
           {activeTab === 'customizer-templates' && (
             <CustomizerAndTemplates 
