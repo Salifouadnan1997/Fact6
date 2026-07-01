@@ -235,7 +235,7 @@ function AuthenticatedApp({ authUser, onLogout }: { authUser: AuthSession; onLog
           {activeTab === 'invoice-generator' && (
             <InvoiceGenerator 
               currentInvoice={currentInvoice} onChangeInvoice={setCurrentInvoice} 
-              products={products} clients={clients} templates={templates} userId={currentUser.id} onTriggerToast={triggerToast} 
+              products={products} clients={clients} templates={templates} userId={currentUser.id} onTriggerToast={triggerToast} onNavigateToTab={handleNavigateToTab} 
             />
           )}
           {activeTab === 'quittance-generator' && (
