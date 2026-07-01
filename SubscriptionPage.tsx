@@ -151,8 +151,8 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ onTriggerToa
 
       const result = await response.json();
 
-      if (result.checkoutUrl) {
-        window.open(result.checkoutUrl, "_blank");
+      const checkoutUrl = result.checkoutUrl || result.data?.checkout_url; if (checkoutUrl) {
+        window.location.href = checkoutUrl;
         onTriggerToast("Redirection vers le paiement Moneroo...", "info");
       } else {
         onTriggerToast("Erreur: " + JSON.stringify(result), "warning");
