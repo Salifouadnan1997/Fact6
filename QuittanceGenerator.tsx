@@ -407,10 +407,10 @@ export const QuittanceGenerator: React.FC<Props> = ({ currentInvoice, userId, on
   try {
     // Vérification quota quittances
       onTriggerToast("DEBUG userId: " + String(userId), "info");
-    const out = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "quittances" });
-    const d = Array.isArray(out) ? out[0] : out;
+    const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "quittances" }); if (error) { throw error; }
+    const d = data;
     if (d?.allowed === false) {
-      onTriggerToast("Quota dépassé (" + (d.used ?? "?") + "/" + (d.limit ?? "?") + ")", "warning");
+      if(d.error === "NO_ACTIVE_SUBSCRIPTION"){onTriggerToast("Aucun abonnement actif.","warning");}else if(d.error === "QUOTA_EXCEEDED"){onTriggerToast(`Quota dépassé (${d.used}/${d.limit})`,"warning");}else{onTriggerToast("Accès refusé.","warning");}
       return;
     }
 
