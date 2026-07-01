@@ -1159,7 +1159,6 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                 onClick={async () => {
                   onTriggerToast('Préparation de l\'impression...', 'info');
                   try {
-                      onTriggerToast("DEBUG userId: " + String(userId), "info");
                       const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "factures" }); if (error) { throw error; } const d = data; if(d?.allowed===false){ if(d.error === "NO_ACTIVE_SUBSCRIPTION"){onTriggerToast("Aucun abonnement actif.","warning");}else if(d.error === "QUOTA_EXCEEDED"){onTriggerToast(`Quota dépassé (${d.used}/${d.limit})`,"warning");}else{onTriggerToast("Accès refusé.","warning");} return; } await printInvoice(currentInvoice);
                   } catch (e) { onTriggerToast('Erreur impression: ' + (e as Error).message, 'warning'); }
                 }}

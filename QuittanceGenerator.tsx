@@ -439,6 +439,13 @@ export const QuittanceGenerator: React.FC<Props> = ({ currentInvoice, userId, on
 
 
   const handlePrint = async () => {
+    const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "quittances" });
+    if (error) throw error;
+    if (data?.allowed === false) {
+      window.location.hash = "#abonnement";
+      onTriggerToast("Quota dépassé. Redirection vers l abonnement...", "warning");
+      return;
+    }
     onTriggerToast('Préparation...','info');
     try {
       let el = document.getElementById('__qt_r') as HTMLDivElement;
