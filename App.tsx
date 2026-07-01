@@ -83,6 +83,7 @@ function AppContent() {
     return <LandingPage />;
   }
 
+  console.log("DEBUG user.id =", user.id);
   const authUser: AuthSession = {
     email: user.email || '',
     name: user.user_metadata.full_name || user.email || 'Utilisateur',
