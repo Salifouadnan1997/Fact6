@@ -7,6 +7,7 @@ interface SubscriptionPageProps {
   onTriggerToast: (msg: string, type?: 'success' | 'warning' | 'info') => void;
   userEmail: string;
   userName: string;
+  userId: string;
 }
 
 const plans = [
@@ -138,7 +139,7 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ onTriggerToa
           body: JSON.stringify({
             amount: planId === "starter" ? 5000 : planId === "business" ? 14900 : planId === "pack_cv_1" ? 600 : planId === "pack_cv_5" ? 2000 : 20000,
             plan: planId,
-            userId: userEmail,
+            userId: userId,
             customer: {
               email: userEmail,
               first_name: userName.split(" ")[0] || "",
@@ -150,8 +151,8 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ onTriggerToa
 
       const result = await response.json();
 
-      if (result.data && result.data.checkout_url) {
-        window.open(result.data.checkout_url, "_blank");
+      if (result.checkoutUrl) {
+        window.open(result.checkoutUrl, "_blank");
         onTriggerToast("Redirection vers le paiement Moneroo...", "info");
       } else {
         onTriggerToast("Erreur: " + JSON.stringify(result), "warning");

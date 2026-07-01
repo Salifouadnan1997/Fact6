@@ -271,7 +271,7 @@ function AuthenticatedApp({ authUser, onLogout }: { authUser: AuthSession; onLog
             <Wallet onTriggerToast={triggerToast} />
           )}
           {activeTab === 'subscription' && (
-            <SubscriptionPage onTriggerToast={triggerToast} userEmail={authUser.email} userName={authUser.name} />
+            <SubscriptionPage onTriggerToast={triggerToast} userEmail={authUser.email} userName={authUser.name} userId={currentUser.id} />
           )}
           {activeTab === 'affiliation' && (
             <Affiliation onTriggerToast={triggerToast} userEmail={authUser.email} userName={authUser.name} />
