@@ -406,7 +406,7 @@ export const QuittanceGenerator: React.FC<Props> = ({ currentInvoice, userId, on
   onTriggerToast('Génération PDF...', 'info');
   try {
     // Vérification quota quittances
-      console.log("DEBUG userId =", userId);
+      onTriggerToast("DEBUG userId: " + String(userId), "info");
     const out = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "quittances" });
     const d = Array.isArray(out) ? out[0] : out;
     if (d?.allowed === false) {

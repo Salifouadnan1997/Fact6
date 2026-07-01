@@ -1159,7 +1159,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                 onClick={async () => {
                   onTriggerToast('Préparation de l\'impression...', 'info');
                   try {
-                      console.log("DEBUG userId =", userId);
+                      onTriggerToast("DEBUG userId: " + String(userId), "info");
                       const out = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric:"factures" }); const d = Array.isArray(out) ? out[0] : out; if(d?.allowed===false){ onTriggerToast("Quota dépassé (" + (d.used ?? "?") + "/" + (d.limit ?? "?") + ")", "warning"); return; } await printInvoice(currentInvoice);
                   } catch (e) { onTriggerToast('Erreur impression: ' + (e as Error).message, 'warning'); }
                 }}
