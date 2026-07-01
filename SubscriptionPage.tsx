@@ -142,7 +142,7 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({ onTriggerToa
             customer: {
               email: userEmail,
               first_name: userName.split(" ")[0] || "",
-              last_name: userName.split(" ").slice(1).join(" ") || ""
+              last_name: userName.split(" ").slice(1).join(" ") || userName.split(" ")[0] || "Client"
             }
           })
         }
