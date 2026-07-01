@@ -1160,7 +1160,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                   onTriggerToast('Préparation de l\'impression...', 'info');
                   try {
                       const out = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric:"factures" }); const d = Array.isArray(out) ? out[0] : out; if(d?.allowed===false){ onTriggerToast("Quota dépassé (" + (d.used ?? "?") + "/" + (d.limit ?? "?") + ")", "warning"); return; } await printInvoice(currentInvoice);
-                  } catch { onTriggerToast('Erreur d\'impression', 'warning'); }
+                  } catch (e) { onTriggerToast('Erreur impression: ' + (e as Error).message, 'warning'); }
                 }}
                 className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-lg shadow-blue-600/30 transition-all flex items-center justify-center space-x-2 border border-blue-400/30"
               >
@@ -1173,7 +1173,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                   try {
                       const out2 = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric:"factures" }); const d2 = Array.isArray(out2) ? out2[0] : out2; if(d2?.allowed===false){ onTriggerToast("Quota dépassé (" + (d2.used ?? "?") + "/" + (d2.limit ?? "?") + ")", "warning"); return; } await exportPDF(currentInvoice);
                     onTriggerToast('PDF téléchargé avec succès !', 'success');
-                  } catch { onTriggerToast('Erreur de génération PDF', 'warning'); }
+                  } catch (e) { onTriggerToast('Erreur de génération PDF: ' + (e as Error).message, 'warning'); }
                 }}
                 className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-3 px-4 rounded-xl transition-all border border-slate-700 flex items-center justify-center space-x-2"
               >
