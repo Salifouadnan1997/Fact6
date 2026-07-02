@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { Invoice, DocumentType, Product, Client, Template } from './types';
 import { exportPDF, printInvoice } from './exportUtils';
-import supabase from './supabase';
 
 // Background removal — contrast-based, works on any paper color
 function removeBg(imgSrc: string): Promise<string> {
@@ -107,7 +106,8 @@ interface InvoiceGeneratorProps {
   clients: Client[];
   templates: Template[];
     userId: string;
-  onTriggerToast, onNavigateToTab: (msg: string, type?: 'success' | 'warning' | 'info') => void;
+  onTriggerToast: (msg: string, type?: 'success' | 'warning' | 'info') => void;
+  onNavigateToTab: (tab: string) => void;
 }
 
 export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
@@ -115,7 +115,8 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
   onChangeInvoice,
   products,
     userId,
-  onTriggerToast, onNavigateToTab
+  onTriggerToast,
+  onNavigateToTab
 }) => {
   const [itemName, setItemName] = useState<string>('');
   const [itemPrice, setItemPrice] = useState<number>(0);
@@ -199,11 +200,11 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
 
   const handleAddItem = () => {
     if (!itemName.trim()) {
-      onTriggerToast, onNavigateToTab('Veuillez entrer le nom du produit', 'warning');
+      onTriggerToast('Veuillez entrer le nom du produit', 'warning');
       return;
     }
     if (itemPrice <= 0) {
-      onTriggerToast, onNavigateToTab('Veuillez entrer un prix valide', 'warning');
+      onTriggerToast('Veuillez entrer un prix valide', 'warning');
       return;
     }
 
@@ -225,13 +226,13 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
     setItemQty(1);
     setItemWeight('');
     setItemColor('');
-    onTriggerToast, onNavigateToTab(`Produit ajouté : ${newItem.name}`, 'success');
+    onTriggerToast(`Produit ajouté : ${newItem.name}`, 'success');
   };
 
   const handleRemoveItem = (itemId: string) => {
     const updatedItems = currentInvoice.items.filter(i => i.id !== itemId);
     updateField('items', updatedItems);
-    onTriggerToast, onNavigateToTab('Produit retiré', 'info');
+    onTriggerToast('Produit retiré', 'info');
   };
 
   const handleItemImageUpload = (itemId: string, file: File) => {
@@ -242,7 +243,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
         i.id === itemId ? { ...i, imageUrl: dataUrl } : i
       );
       updateField('items', updatedItems);
-      onTriggerToast, onNavigateToTab('Image produit ajoutée !', 'success');
+      onTriggerToast('Image produit ajoutée !', 'success');
     };
     reader.readAsDataURL(file);
   };
@@ -260,7 +261,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
       const reader = new FileReader();
       reader.onload = (event) => {
         onChangeInvoice({ ...currentInvoice, logoUrl: event.target?.result as string });
-        onTriggerToast, onNavigateToTab('Logo de l\'entreprise mis à jour !', 'success');
+        onTriggerToast('Logo de l\'entreprise mis à jour !', 'success');
       };
       reader.readAsDataURL(file);
     }
@@ -338,7 +339,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
       amountPaid,
       reliquat: 0
     });
-    onTriggerToast, onNavigateToTab('IA Génération automatique réussie', 'success');
+    onTriggerToast('IA Génération automatique réussie', 'success');
   };
 
 
@@ -497,7 +498,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                     logoUrl: currentInvoice.logoUrl,
                   };
                   localStorage.setItem('factureset_supplier', JSON.stringify(profile));
-                  onTriggerToast, onNavigateToTab('Profil fournisseur enregistré ! Ces infos seront appliquées automatiquement.', 'success');
+                  onTriggerToast('Profil fournisseur enregistré ! Ces infos seront appliquées automatiquement.', 'success');
                   setShowSupplierSetup(false);
                 }}
                   className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2.5 rounded-xl shadow-sm transition-all">
@@ -832,10 +833,10 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                       <div className="flex space-x-1.5 mt-1">
                         {['#dc2626','#1e40af','#059669','#7c3aed','#d97706','#0f172a','#be185d','#0284c7'].map(c => (
                           <button key={c} onClick={async () => {
-                            onTriggerToast, onNavigateToTab('Application de la couleur...', 'info');
+                            onTriggerToast('Application de la couleur...', 'info');
                             const tinted = await colorizeImage(currentInvoice.stampImageUrl!, c);
                             onChangeInvoice({ ...currentInvoice, stampImageUrl: tinted, stampColor: c });
-                            onTriggerToast, onNavigateToTab('Couleur appliquée !', 'success');
+                            onTriggerToast('Couleur appliquée !', 'success');
                           }}
                           className="w-5 h-5 rounded-full border border-slate-300 hover:scale-125 transition-transform" style={{ backgroundColor: c }}></button>
                         ))}
@@ -869,13 +870,13 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                   <Upload className="w-3.5 h-3.5" /><span>Importer un tampon</span>
                   <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
                     const file = e.target.files?.[0]; if (!file) return;
-                    onTriggerToast, onNavigateToTab('Suppression arrière-plan...', 'info');
+                    onTriggerToast('Suppression arrière-plan...', 'info');
                     const reader = new FileReader();
                     reader.onload = async (ev) => {
                       const src = ev.target?.result as string;
                       const cleaned = await removeBg(src);
                       onChangeInvoice({ ...currentInvoice, stampImageUrl: cleaned, showStamp: true });
-                      onTriggerToast, onNavigateToTab('Tampon importé (arrière-plan supprimé) !', 'success');
+                      onTriggerToast('Tampon importé (arrière-plan supprimé) !', 'success');
                     };
                     reader.readAsDataURL(file);
                   }} />
@@ -904,10 +905,10 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                       <div className="flex space-x-1.5 mt-1">
                         {['#1e293b','#1e40af','#dc2626','#059669','#7c3aed','#d97706','#0f172a','#be185d'].map(c => (
                           <button key={c} onClick={async () => {
-                            onTriggerToast, onNavigateToTab('Application de la couleur...', 'info');
+                            onTriggerToast('Application de la couleur...', 'info');
                             const tinted = await colorizeImage(currentInvoice.signatureImageUrl!, c);
                             onChangeInvoice({ ...currentInvoice, signatureImageUrl: tinted });
-                            onTriggerToast, onNavigateToTab('Couleur appliquée !', 'success');
+                            onTriggerToast('Couleur appliquée !', 'success');
                           }}
                           className="w-5 h-5 rounded-full border border-slate-300 hover:scale-125 transition-transform" style={{ backgroundColor: c }}></button>
                         ))}
@@ -941,13 +942,13 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                   <Upload className="w-3.5 h-3.5" /><span>Importer une signature</span>
                   <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
                     const file = e.target.files?.[0]; if (!file) return;
-                    onTriggerToast, onNavigateToTab('Suppression arrière-plan...', 'info');
+                    onTriggerToast('Suppression arrière-plan...', 'info');
                     const reader = new FileReader();
                     reader.onload = async (ev) => {
                       const src = ev.target?.result as string;
                       const cleaned = await removeBg(src);
                       onChangeInvoice({ ...currentInvoice, signatureImageUrl: cleaned, showSignature: true });
-                      onTriggerToast, onNavigateToTab('Signature importée (arrière-plan supprimé) !', 'success');
+                      onTriggerToast('Signature importée (arrière-plan supprimé) !', 'success');
                     };
                     reader.readAsDataURL(file);
                   }} />
@@ -1158,10 +1159,10 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
             <div className="grid grid-cols-2 gap-3 mt-6">
               <button 
                 onClick={async () => {
-                  onTriggerToast, onNavigateToTab('Préparation de l\'impression...', 'info');
+                  onTriggerToast('Préparation de l\'impression...', 'info');
                   try {
-                      const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "factures" }); if (error) { throw error; } const d = data; if(d?.allowed===false){ if(d.error === "NO_ACTIVE_SUBSCRIPTION"){onTriggerToast, onNavigateToTab("Aucun abonnement actif.","warning");}else if(d.error === "QUOTA_EXCEEDED"){onTriggerToast(`Quota dépassé (${d.used}/${d.limit})`,"warning");}else{onTriggerToast("Accès refusé.","warning");} return; } await printInvoice(currentInvoice);
-                  } catch (e) { onTriggerToast, onNavigateToTab('Erreur impression: ' + (e as Error).message, 'warning'); }
+                      const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "factures" }); if (error) { throw error; } const d = data; if(d?.allowed===false){ if(d.error === "NO_ACTIVE_SUBSCRIPTION"){onTriggerToast("Aucun abonnement actif.","warning");}else if(d.error === "QUOTA_EXCEEDED"){onTriggerToast(`Quota dépassé (${d.used}/${d.limit})`,"warning");}else{onTriggerToast("Accès refusé.","warning");} return; } await printInvoice(currentInvoice);
+                  } catch (e) { onTriggerToast('Erreur impression: ' + (e as Error).message, 'warning'); }
                 }}
                 className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-lg shadow-blue-600/30 transition-all flex items-center justify-center space-x-2 border border-blue-400/30"
               >
@@ -1170,11 +1171,11 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
               </button>
               <button 
                 onClick={async () => {
-                  onTriggerToast, onNavigateToTab('Génération du PDF en cours...', 'info');
+                  onTriggerToast('Génération du PDF en cours...', 'info');
                   try {
-                      const { data: data2, error: error2 } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "factures" }); if (error2) { throw error2; } const d2 = data2; if(d2?.allowed===false){ if(d2.error === "NO_ACTIVE_SUBSCRIPTION"){onTriggerToast, onNavigateToTab("Aucun abonnement actif.","warning");}else if(d2.error === "QUOTA_EXCEEDED"){onTriggerToast(`Quota dépassé (${d2.used}/${d2.limit})`,"warning");}else{onTriggerToast("Accès refusé.","warning");} return; } await exportPDF(currentInvoice);
-                    onTriggerToast, onNavigateToTab('PDF téléchargé avec succès !', 'success');
-                  } catch (e) { onTriggerToast, onNavigateToTab('Erreur de génération PDF: ' + (e as Error).message, 'warning'); }
+                      const { data: data2, error: error2 } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "factures" }); if (error2) { throw error2; } const d2 = data2; if(d2?.allowed===false){ if(d2.error === "NO_ACTIVE_SUBSCRIPTION"){onTriggerToast("Aucun abonnement actif.","warning");}else if(d2.error === "QUOTA_EXCEEDED"){onTriggerToast(`Quota dépassé (${d2.used}/${d2.limit})`,"warning");}else{onTriggerToast("Accès refusé.","warning");} return; } await exportPDF(currentInvoice);
+                    onTriggerToast('PDF téléchargé avec succès !', 'success');
+                  } catch (e) { onTriggerToast('Erreur de génération PDF: ' + (e as Error).message, 'warning'); }
                 }}
                 className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-3 px-4 rounded-xl transition-all border border-slate-700 flex items-center justify-center space-x-2"
               >
