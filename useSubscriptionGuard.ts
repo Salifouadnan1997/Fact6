@@ -1,15 +1,13 @@
-import { useNavigate } from 'react-router-dom';
 import { supabase } from './supabase';
 
 export const useSubscriptionGuard = () => {
-  const navigate = useNavigate();
 
   const checkAndProceed = async (feature: string, action: () => void) => {
     try {
       // 1. Récupérer l'ID de l'utilisateur actuellement connecté
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        navigate('/subscription');
+        window.location.href = '/subscription';
         return;
       }
 
@@ -26,7 +24,7 @@ export const useSubscriptionGuard = () => {
 
       // Si la fonction refuse ou s'il y a une erreur, on redirige vers la page d'abonnement
       if (error || !data?.allowed) {
-        navigate('/subscription');
+        window.location.href = '/subscription';
         return;
       }
 
@@ -35,7 +33,7 @@ export const useSubscriptionGuard = () => {
       
     } catch (err) {
       console.error("Erreur Guard:", err);
-      navigate('/subscription');
+      window.location.href = '/subscription';
     }
   };
 
