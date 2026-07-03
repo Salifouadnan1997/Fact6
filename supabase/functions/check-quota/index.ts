@@ -6,6 +6,7 @@ serve(async (req) => {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+  // 1. Chercher l'abonnement actif de l'utilisateur
   const subRes = await fetch(
     `${SUPABASE_URL}/rest/v1/user_subscriptions?user_id=eq.${user_id}&status=eq.active`,
     {
@@ -17,8 +18,11 @@ serve(async (req) => {
   );
 
   const sub = await subRes.json();
-  const planSlug = sub?.[0]?.plan_slug;
+  
+  // CORRECTION : Si aucun abonnement n'est trouvé, on lui attribue le slug 'free' par défaut
+  const planSlug = sub?.[0]?.plan_slug || 'free';
 
+  // 2. Récupérer les quotas du plan
   const planRes = await fetch(
     `${SUPABASE_URL}/rest/v1/plans?slug=eq.${planSlug}`,
     {
@@ -32,14 +36,21 @@ serve(async (req) => {
   const plan = await planRes.json();
   const quotas = plan?.[0]?.quotas || {};
 
-  const limit = quotas?.[metric];
+  let limit = quotas?.[metric];
 
+  // CORRECTION : Si la limite n'est pas définie en BDD pour le plan free, on donne 5 factures gratuites par défaut
+  if (limit === undefined) {
+    limit = 5; 
+  }
+
+  // Si le plan est illimité (-1)
   if (limit === -1) {
     return new Response(JSON.stringify({ allowed: true }), {
       headers: { "Content-Type": "application/json" }
     });
   }
 
+  // 3. Récupérer la consommation actuelle de l'utilisateur
   const usageRes = await fetch(
     `${SUPABASE_URL}/rest/v1/usage_stats?user_id=eq.${user_id}&metric=eq.${metric}`,
     {
@@ -53,6 +64,7 @@ serve(async (req) => {
   const usage = await usageRes.json();
   const count = usage?.[0]?.count || 0;
 
+  // L'utilisateur est autorisé tant que sa consommation est inférieure à sa limite
   return new Response(
     JSON.stringify({
       allowed: count < limit,
