@@ -2,38 +2,41 @@ import { supabase } from './supabase';
 
 export const useSubscriptionGuard = () => {
 
-  const checkAndProceed = async (feature: string, action: () => void) => {
+  const checkAndProceed = async (feature: string, action: () => void | Promise<void>) => {
     try {
-      // 1. Récupérer l'ID de l'utilisateur actuellement connecté
+      // 1. Vérification de l'utilisateur
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        window.location.href = '/subscription';
+        alert("Action refusée : Vous n'êtes pas connecté.");
         return;
       }
 
-      // 2. Traduire 'invoice' en 'factures' pour correspondre à ta base de données
       const metricName = feature === 'invoice' ? 'factures' : feature;
 
-      // 3. Envoyer les bonnes données à la fonction Supabase
+      // 2. Appel à la fonction Supabase
       const { data, error } = await supabase.functions.invoke('check-quota', {
-        body: { 
-          user_id: user.id, 
-          metric: metricName 
-        }
+        body: { user_id: user.id, metric: metricName }
       });
 
-      // Si la fonction refuse ou s'il y a une erreur, on redirige vers la page d'abonnement
-      if (error || !data?.allowed) {
-        window.location.href = '/subscription';
+      if (error) {
+        alert("Erreur serveur : Impossible de vérifier l'abonnement.");
+        console.error("Détail de l'erreur:", error);
         return;
       }
 
-      // Si tout est validé, on lance l'action (Téléchargement ou Impression)
-      action();
+      // 3. Vérification du droit d'accès
+      if (!data?.allowed) {
+        alert("Alerte : Quota dépassé ou aucun abonnement actif. Vous devez souscrire à un plan.");
+        // (On a enlevé la redirection ici pour stopper le clignotement)
+        return;
+      }
+
+      // 4. Si tout est bon, on lance le téléchargement ou l'impression
+      await action();
       
     } catch (err) {
       console.error("Erreur Guard:", err);
-      window.location.href = '/subscription';
+      alert("Une erreur inattendue s'est produite lors de la vérification.");
     }
   };
 
