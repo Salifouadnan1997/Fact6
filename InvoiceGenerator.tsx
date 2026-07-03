@@ -1162,31 +1162,37 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
 
             {/* Print & Export Actions */}
             <div className="grid grid-cols-2 gap-3 mt-6">
-              <button 
-                onClick={async () => {
+                            <button 
+                onClick={() => checkAndProceed('invoice', async () => {
                   onTriggerToast('Préparation de l\'impression...', 'info');
                   try {
-                      const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "factures" }); if (error) { throw error; } const d = data; if(d?.allowed===false){ if(d.error === "NO_ACTIVE_SUBSCRIPTION"){onTriggerToast("Aucun abonnement actif.","warning");}else if(d.error === "QUOTA_EXCEEDED"){onTriggerToast(`Quota dépassé (${d.used}/${d.limit})`,"warning");}else{onTriggerToast("Accès refusé.","warning");} return; } await printInvoice(currentInvoice);
-                  } catch (e) { onTriggerToast('Erreur impression: ' + (e as Error).message, 'warning'); }
-                }}
+                    await printInvoice(currentInvoice);
+                  } catch (e) { 
+                    onTriggerToast('Erreur impression: ' + (e as Error).message, 'warning'); 
+                  }
+                })}
                 className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-lg shadow-blue-600/30 transition-all flex items-center justify-center space-x-2 border border-blue-400/30"
               >
                 <Printer className="w-4 h-4" />
                 <span>Imprimer Ticket</span>
               </button>
+
               <button 
-                onClick={async () => {
+                onClick={() => checkAndProceed('invoice', async () => {
                   onTriggerToast('Génération du PDF en cours...', 'info');
                   try {
-                      const { data: data2, error: error2 } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "factures" }); if (error2) { throw error2; } const d2 = data2; if(d2?.allowed===false){ if(d2.error === "NO_ACTIVE_SUBSCRIPTION"){onTriggerToast("Aucun abonnement actif.","warning");}else if(d2.error === "QUOTA_EXCEEDED"){onTriggerToast(`Quota dépassé (${d2.used}/${d2.limit})`,"warning");}else{onTriggerToast("Accès refusé.","warning");} return; } await exportPDF(currentInvoice);
+                    await exportPDF(currentInvoice);
                     onTriggerToast('PDF téléchargé avec succès !', 'success');
-                  } catch (e) { onTriggerToast('Erreur de génération PDF: ' + (e as Error).message, 'warning'); }
-                }}
+                  } catch (e) { 
+                    onTriggerToast('Erreur de génération PDF: ' + (e as Error).message, 'warning'); 
+                  }
+                })}
                 className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-3 px-4 rounded-xl transition-all border border-slate-700 flex items-center justify-center space-x-2"
               >
                 <Download className="w-4 h-4 text-blue-400" />
                 <span>Télécharger PDF</span>
               </button>
+
             </div>
             
             <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
