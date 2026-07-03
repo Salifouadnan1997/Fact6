@@ -120,6 +120,9 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
   onNavigateToTab
 }) => {
   const [itemName, setItemName] = useState<string>('');
+    const { checkAndProceed } = useSubscriptionGuard();
+
+  const [itemName, setItemName] = useState<string>('');
   const [itemPrice, setItemPrice] = useState<number>(0);
   const [itemQty, setItemQty] = useState<number>(1);
   const [itemWeight, setItemWeight] = useState<string>('');
