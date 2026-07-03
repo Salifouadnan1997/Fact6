@@ -118,9 +118,9 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
     userId,
   onTriggerToast,
   onNavigateToTab
+  
 }) => {
-  const [itemName, setItemName] = useState<string>('');
-    const { checkAndProceed } = useSubscriptionGuard();
+  const { checkAndProceed } = useSubscriptionGuard();
 
   const [itemName, setItemName] = useState<string>('');
   const [itemPrice, setItemPrice] = useState<number>(0);
@@ -150,6 +150,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
       onChangeInvoice({ ...currentInvoice, signaturePos: { x, y } });
     }
   };
+
 
   const handleDragEnd = () => setDragging(null);
 
