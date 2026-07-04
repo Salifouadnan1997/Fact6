@@ -1225,9 +1225,6 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
               </button>
 
             </div>
-
-
-            </div>
             
             <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
               <span>Statut Connexion POS : <strong className="text-emerald-400">En ligne (USB/Bluetooth)</strong></span>
