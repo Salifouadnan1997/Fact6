@@ -451,24 +451,6 @@ export const QuittanceGenerator: React.FC<Props> = ({ currentInvoice, userId, on
     return true;
   };
 
-  const prepareElement = async () => {
-    let el = document.getElementById('__qt_r') as HTMLDivElement;
-    if (!el) { 
-      el = document.createElement('div'); 
-      el.id = '__qt_r'; 
-      el.style.cssText = 'position:fixed;left:-4000px;top:0;z-index:-1;background:#fff;'; 
-      document.body.appendChild(el); 
-    }
-    el.innerHTML = buildExportHTML();
-    
-    const imgs = el.querySelectorAll('img');
-    await Promise.all(Array.from(imgs).map(i => i.complete ? Promise.resolve() : new Promise<void>(r => { 
-      i.onload = () => r(); i.onerror = () => r(); setTimeout(r, 1500); 
-    })));
-    
-    return el.firstElementChild as HTMLElement;
-  };
-
   // --- HANDLERS ---
 
   const handlePDF = async () => {
