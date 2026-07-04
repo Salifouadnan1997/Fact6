@@ -1,4 +1,3 @@
-const fileInputRef = useRef<HTMLInputElement>(null); 
 import { useState, useRef, useEffect } from 'react';
 import { FileUp, Stamp, PenTool, Download, Trash2, Move, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Upload, Check, RotateCcw } from 'lucide-react';
 import html2canvas from 'html2canvas';
@@ -79,8 +78,11 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
   const [loading, setLoading] = useState(false);
   const [overlays, setOverlays] = useState<any[]>([]);
   const [dragging, setDragging] = useState<string | null>(null);
+  
+  // Ref corrigées et déclarées DANS le composant
   const containerRef = useRef<HTMLDivElement>(null);
   const signCanvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Tools state
   const [showTools, setShowTools] = useState(false);
@@ -104,7 +106,6 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
     if (error) throw error;
     
     if (data?.allowed === false) {
-      // Message dynamique basé sur la limite renvoyée par la DB
       const msg = `Vos ${data.limit} ${metric} gratuites sont épuisées 🚀 Passez au plan Pro !`;
       onTriggerToast(msg, "warning");
       if (onNavigateToTab) setTimeout(() => onNavigateToTab('subscription'), 2500);
@@ -152,19 +153,19 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
       const reader = new FileReader();
       reader.onload = (ev) => { setPages([ev.target?.result as string]); onTriggerToast('Image importée !', 'success'); };
       reader.readAsDataURL(file);
-    } else if (file.type === 'application/pdf') {
+    } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
       setLoading(true); onTriggerToast('Conversion du PDF...', 'info');
       try {
         const ab = await file.arrayBuffer(); const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         const imgs: string[] = [];
         for (let i = 1; i <= pdf.numPages; i++) {
-          const pg = await pdf.getPage(i); const vp = pg.getViewport({ scale: 2 });
+          const pg = await pdf.getPage(i); const vp = pg.getViewport({ scale: 1.5 }); // Scale 1.5 pour mobile
           const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
           await pg.render({ canvasContext: cv.getContext('2d')!, viewport: vp }).promise;
-          imgs.push(cv.toDataURL('image/png'));
+          imgs.push(cv.toDataURL('image/jpeg', 0.8)); // Compression JPEG pour mobile
         }
         setPages(imgs); onTriggerToast(`${imgs.length} page(s) chargée(s) !`, 'success');
-      } catch { onTriggerToast('Erreur PDF', 'warning'); }
+      } catch (err: any) { onTriggerToast('Erreur PDF : ' + err.message, 'warning'); }
       setLoading(false);
     } else { onTriggerToast('PDF, JPG, PNG acceptés', 'warning'); }
   };
@@ -178,30 +179,38 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
 
   const removeOverlay = (id: string) => setOverlays(p => p.filter(o => o.id !== id));
   const resizeOverlay = (id: string, d: number) => setOverlays(p => p.map(o => o.id === id ? { ...o, scale: Math.max(0.3, Math.min(3, o.scale + d)) } : o));
-  const onDS = (id: string) => (e: React.MouseEvent|React.TouchEvent) => { e.preventDefault(); setDragging(id); };
-  const onDM = (e: React.MouseEvent|React.TouchEvent) => { if (!dragging||!containerRef.current) return; const r=containerRef.current.getBoundingClientRect(); const cx='touches' in e?e.touches[0].clientX:e.clientX; const cy='touches' in e?e.touches[0].clientY:e.clientY; setOverlays(p=>p.map(o=>o.id===dragging?{...o,x:Math.max(5,Math.min(95,((cx-r.left)/r.width)*100)),y:Math.max(5,Math.min(95,((cy-r.top)/r.height)*100))}:o)); };
+  
+  // Drag & Drop optimisé et sécurisé pour Mobile
+  const onDS = (id: string) => (e: React.MouseEvent | React.TouchEvent) => {
+    if (e.cancelable) e.preventDefault(); 
+    setDragging(id);
+  };
+  const onDM = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!dragging || !containerRef.current) return;
+    const r = containerRef.current.getBoundingClientRect();
+    let cx = 0, cy = 0;
+    if ('touches' in e && e.touches.length > 0) {
+      cx = e.touches[0].clientX; cy = e.touches[0].clientY;
+    } else if ('clientX' in e) {
+      cx = e.clientX; cy = e.clientY;
+    } else return;
+    const xPercentage = Math.max(5, Math.min(95, ((cx - r.left) / r.width) * 100));
+    const yPercentage = Math.max(5, Math.min(95, ((cy - r.top) / r.height) * 100));
+    setOverlays(p => p.map(o => o.id === dragging ? { ...o, x: xPercentage, y: yPercentage } : o));
+  };
   const onDE = () => setDragging(null);
 
-      const handleExport = async () => {
-    alert("Étape 1 : Début de l'exportation");
-    if (pages.length === 0) {
-      alert("Erreur : Aucune page à exporter");
-      return;
-    }
+  const handleExport = async () => {
+    if (pages.length === 0) return;
     
-    alert("Étape 2 : Vérification du quota en cours...");
     try {
       const isAuthorized = await checkQuota('signatures');
-      if (!isAuthorized) {
-        alert("Erreur : Quota non autorisé ou épuisé");
-        return;
-      }
+      if (!isAuthorized) return;
     } catch (error: any) {
-      alert("CRASH à l'étape 2 (Supabase) : " + error.message);
+      alert("Erreur base de données : " + error.message);
       return;
     }
 
-    alert("Étape 3 : Quota OK. Préparation du document...");
     onTriggerToast('Génération du document...', 'info');
     
     try {
@@ -224,12 +233,9 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
         ${overlayHTML}
       </div>`;
 
-      alert("Étape 4 : Lancement de html2canvas...");
       const target = el.firstElementChild as HTMLElement;
-      
       const cv = await html2canvas(target, { scale: 1.5, useCORS: true, allowTaint: true, backgroundColor: '#fff', logging: false });
       
-      alert("Étape 5 : Lancement de jsPDF...");
       const imgData = cv.toDataURL('image/jpeg', 0.85);
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pw = 190, ph = 277, ratio = cv.width / cv.height;
@@ -239,17 +245,14 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
       pdf.addImage(imgData, 'JPEG', (210 - fw) / 2, 10, fw, fh);
       pdf.save(`signe_${docName || 'document'}.pdf`);
       
-      alert("Étape 6 : Succès ! Le document devrait se télécharger.");
       onTriggerToast('Document téléchargé !', 'success');
     } catch (e: any) {
-      alert("CRASH Étape finale : " + (e.message || 'Erreur inconnue'));
+      alert("Erreur Export : " + (e.message || 'Erreur inconnue'));
     }
   };
 
   const handlePrint = async () => {
     if (pages.length === 0) return;
-    
-    // Vérification quota
     const isAuthorized = await checkQuota('signatures');
     if (!isAuthorized) return;
 
@@ -264,11 +267,8 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
       });
       el.innerHTML = `<div style="position:relative;width:600px;background:#fff;"><img src="${pageImg}" style="width:100%;height:auto;display:block;" />${overlayHTML}</div>`;
       const target = el.firstElementChild as HTMLElement;
-      const imgs = target.querySelectorAll('img');
-      await Promise.all(Array.from(imgs).map(img => img.complete ? Promise.resolve() : new Promise<void>(r => { img.onload = () => r(); img.onerror = () => r(); setTimeout(r, 3000); })));
-      await new Promise(r => setTimeout(r, 200));
-      const cv = await html2canvas(target, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fff', logging: false });
-      const du = cv.toDataURL('image/png');
+      const cv = await html2canvas(target, { scale: 1.5, useCORS: true, allowTaint: true, backgroundColor: '#fff', logging: false });
+      const du = cv.toDataURL('image/jpeg', 0.9);
       const w = window.open('', '_blank');
       if (w) {
         w.document.write(`<!DOCTYPE html><html><head><title>${docName}</title><style>body{margin:0;display:flex;justify-content:center;background:#fff;}img{max-width:100%;height:auto;}@media print{img{max-width:100%;}}</style></head><body><img src="${du}" onload="setTimeout(function(){window.print();},400);"/></body></html>`);
@@ -279,17 +279,25 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-5">
-      {/* ... Votre JSX reste inchangé ... */}
+      
+      {/* Input principal invisible utilisé par les boutons d'importation */}
+      <input 
+        type="file" 
+        ref={fileInputRef}
+        accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*" 
+        className="hidden" 
+        onChange={handleImportDoc} 
+      />
+
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center space-x-2 mb-1"><FileUp className="w-5 h-5 text-blue-600" /><h1 className="text-lg font-extrabold text-slate-900">Signer un Document</h1></div>
         <p className="text-xs text-slate-500">Importez PDF ou image, configurez cachet/signature, puis positionnez et téléchargez.</p>
       </div>
 
       <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center gap-2">
-        <label className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm cursor-pointer flex items-center space-x-1.5">
+        <button onClick={() => fileInputRef.current?.click()} className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm flex items-center space-x-1.5">
           <FileUp className="w-4 h-4" /><span>Importer</span>
-          <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*" className="hidden" onChange={handleImportDoc} />
-        </label>
+        </button>
         {pages.length > 0 && (<>
           <button onClick={() => addOverlay('stamp')} className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-3 py-2 rounded-xl border border-rose-200 flex items-center space-x-1.5"><Stamp className="w-4 h-4" /><span>Cachet</span></button>
           <button onClick={() => addOverlay('signature')} className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-2 rounded-xl border border-indigo-200 flex items-center space-x-1.5"><PenTool className="w-4 h-4" /><span>Signature</span></button>
@@ -302,7 +310,6 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
       </div>
 
       {showTools && (
-            {showTools && (
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-4 animate-fadeIn">
           <div className="flex bg-slate-100 rounded-xl p-1">
             <button onClick={() => setToolTab('stamp')} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center space-x-1.5 ${toolTab==='stamp'?'bg-white text-rose-600 shadow-sm':'text-slate-500'}`}><Stamp className="w-4 h-4" /><span>Cachet</span></button>
@@ -334,30 +341,11 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
                 </div>
               )}
               
-              {/* BOUTON CORRIGÉ : Importation d'une image de TAMPON (adapté mobile) */}
-              <button 
-                onClick={() => document.getElementById('stamp-upload-input')?.click()} 
-                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold py-2 rounded-xl border border-slate-200 flex items-center justify-center space-x-1"
-              >
+              {/* Import image de tampon */}
+              <button onClick={() => document.getElementById('stamp-upload-input')?.click()} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold py-2 rounded-xl border border-slate-200 flex items-center justify-center space-x-1">
                 <Upload className="w-3 h-3" /><span>Ou importer un tampon (image)</span>
               </button>
-              <input 
-                id="stamp-upload-input"
-                type="file" 
-                accept="image/*" 
-                className="hidden" 
-                onChange={async e => { 
-                  const f = e.target.files?.[0]; 
-                  if (!f) return; 
-                  const r = new FileReader(); 
-                  r.onload = async ev => {
-                    setStampImg(await removeBg(ev.target?.result as string)); 
-                    onTriggerToast('Tampon importé !', 'success');
-                  }; 
-                  r.readAsDataURL(f); 
-                }} 
-              />
-
+              <input id="stamp-upload-input" type="file" accept="image/*" className="hidden" onChange={async e => { const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=async ev=>{setStampImg(await removeBg(ev.target?.result as string)); onTriggerToast('Tampon importé !','success');}; r.readAsDataURL(f); }} />
             </div>
           )}
 
@@ -393,10 +381,12 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
                 <button onClick={clearCanvas} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold py-2 rounded-xl border border-slate-200 flex items-center justify-center space-x-1"><RotateCcw className="w-3 h-3" /><span>Effacer</span></button>
                 <button onClick={saveSign} disabled={!hasDrawn} className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-[10px] font-bold py-2 rounded-xl shadow-sm flex items-center justify-center space-x-1"><Check className="w-3 h-3" /><span>Enregistrer</span></button>
               </div>
-              <label className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold py-2 rounded-xl border border-slate-200 flex items-center justify-center space-x-1 cursor-pointer">
+              
+              {/* Import image de signature */}
+              <button onClick={() => document.getElementById('sign-upload-input')?.click()} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold py-2 rounded-xl border border-slate-200 flex items-center justify-center space-x-1">
                 <Upload className="w-3 h-3" /><span>Ou importer une signature (image)</span>
-                <input type="file" accept="image/*" className="hidden" onChange={async e => { const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=async ev=>{setSignImg(await removeBg(ev.target?.result as string)); onTriggerToast('Importée !','success');}; r.readAsDataURL(f); }} />
-              </label>
+              </button>
+              <input id="sign-upload-input" type="file" accept="image/*" className="hidden" onChange={async e => { const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=async ev=>{setSignImg(await removeBg(ev.target?.result as string)); onTriggerToast('Importée !','success');}; r.readAsDataURL(f); }} />
             </div>
           )}
         </div>
@@ -453,14 +443,11 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
           <FileUp className="w-12 h-12 text-slate-300 mx-auto" />
           <p className="text-sm font-bold text-slate-600">Importez votre document</p>
           <p className="text-xs text-slate-400">PDF, JPG, PNG, WEBP — Les PDF sont convertis en images automatiquement</p>
-          <label className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md cursor-pointer">
+          <button onClick={() => fileInputRef.current?.click()} className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md cursor-pointer">
             <FileUp className="w-4 h-4" /><span>Choisir un fichier</span>
-            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*" className="hidden" onChange={handleImportDoc} />
-          </label>
+          </button>
         </div>
       ) : null}
     </div>
   );
 };
-
-
