@@ -117,7 +117,12 @@ const STAMP_STYLES = [
   {id:'hexagon',label:'⬡ Hexagone'},{id:'ribbon',label:'⊞ Ruban'},
 ];
 
-interface Props { currentInvoice: Invoice; userId: string; onTriggerToast: (m: string, t?: 'success'|'warning'|'info') => void; }
+interface Props { 
+  currentInvoice: Invoice; 
+  userId: string; 
+  onTriggerToast: (m: string, t?: 'success'|'warning'|'info') => void;
+  onNavigateToTab?: (tab: string) => void; 
+}
 
 // Field input helper
 const F = ({ label, value, onChange, placeholder, type = 'text', required, mono, half }: { label: string; value: string|number; onChange: (v: any) => void; placeholder?: string; type?: string; required?: boolean; mono?: boolean; half?: boolean }) => (
@@ -191,7 +196,8 @@ const TEMPLATES: Record<string, { id: string; name: string; color: string }[]> =
   ],
 };
 
-export const QuittanceGenerator: React.FC<Props> = ({ currentInvoice, userId, onTriggerToast }) => {
+export const QuittanceGenerator: React.FC<Props> = ({ currentInvoice, userId, onTriggerToast, onNavigateToTab }) => {
+
   const [type, setType] = useState('loyer');
   const [tplColor, setTplColor] = useState('#0d9488');
   const previewRef = useRef<HTMLDivElement>(null);
