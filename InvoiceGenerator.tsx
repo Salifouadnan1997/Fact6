@@ -1160,7 +1160,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
               </div>
             </div>
 
-                        {/* Print & Export Actions (PRODUCTION) */}
+                                    {/* Print & Export Actions (PRODUCTION AVEC REDIRECTION) */}
             <div className="grid grid-cols-2 gap-3 mt-6">
               
               {/* Bouton Impression Sécurisé */}
@@ -1168,15 +1168,24 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                 onClick={async () => {
                   onTriggerToast("Vérification de l'abonnement...", 'info');
                   try {
-                    // 1. Vérification du quota en base de données
                     const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "factures" });
-                    
                     if (error) throw error;
                     
-                    // 2. Traitement du refus
+                    // 2. Traitement du refus avec message dynamique et redirection
                     if (data?.allowed === false) { 
-                      onTriggerToast(`Abonnement requis : Quota dépassé (${data.used}/${data.limit}).`, "warning");
-                      return; // On stoppe l'impression
+                      const isFreePlan = data.limit === 5;
+                      const msg = isFreePlan 
+                        ? "Vos 5 factures gratuites sont épuisées 🚀 Passez au plan Pro pour un accès illimité !" 
+                        : "Votre abonnement est épuisé. Renouvelez-le pour continuer à facturer.";
+                      
+                      onTriggerToast(msg, "warning");
+                      
+                      // Redirection vers la page d'abonnement après 2.5 secondes
+                      setTimeout(() => {
+                        window.location.href = '/subscription';
+                      }, 2500);
+                      
+                      return; 
                     } 
                     
                     // 3. Impression autorisée
@@ -1198,15 +1207,24 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                 onClick={async () => {
                   onTriggerToast("Vérification de l'abonnement...", 'info');
                   try {
-                    // 1. Vérification du quota en base de données
                     const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "factures" });
-                    
                     if (error) throw error;
                     
-                    // 2. Traitement du refus
+                    // 2. Traitement du refus avec message dynamique et redirection
                     if (data?.allowed === false) { 
-                      onTriggerToast(`Abonnement requis : Quota dépassé (${data.used}/${data.limit}).`, "warning");
-                      return; // On stoppe la génération
+                      const isFreePlan = data.limit === 5;
+                      const msg = isFreePlan 
+                        ? "Vos 5 factures gratuites sont épuisées 🚀 Passez au plan Pro pour un accès illimité !" 
+                        : "Votre abonnement est épuisé. Renouvelez-le pour continuer à facturer.";
+                      
+                      onTriggerToast(msg, "warning");
+                      
+                      // Redirection vers la page d'abonnement après 2.5 secondes
+                      setTimeout(() => {
+                        window.location.href = '/subscription';
+                      }, 2500);
+                      
+                      return; 
                     } 
                     
                     // 3. Génération autorisée
@@ -1225,6 +1243,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
               </button>
 
             </div>
+
             
             <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
               <span>Statut Connexion POS : <strong className="text-emerald-400">En ligne (USB/Bluetooth)</strong></span>
