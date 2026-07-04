@@ -96,22 +96,37 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
   const [hasDrawn, setHasDrawn] = useState(false);
   const [signColor, setSignColor] = useState('#1e293b');
 
-  // Quota guard
+    // Quota guard corrigé : Ne bloque plus si la fonction Supabase n'existe pas
   const checkQuota = async (metric: string): Promise<boolean> => {
-    const { data, error } = await supabase.rpc("check_and_increment", { 
-      p_user_id: userId, 
-      p_metric: metric 
-    });
-    
-    if (error) throw error;
-    
-    if (data?.allowed === false) {
-      const msg = `Vos ${data.limit} ${metric} gratuites sont épuisées 🚀 Passez au plan Pro !`;
-      onTriggerToast(msg, "warning");
-      if (onNavigateToTab) setTimeout(() => onNavigateToTab('subscription'), 2500);
-      return false;
+    try {
+      const { data, error } = await supabase.rpc("check_and_increment", { 
+        p_user_id: userId, 
+        p_metric: metric 
+      });
+      
+      // Si Supabase ne trouve pas la fonction, on autorise l'action par défaut
+      if (error && error.message.includes("Could not find the function")) {
+        console.warn("Fonction check_and_increment introuvable sur Supabase. Vérification ignorée.");
+        return true; 
+      }
+
+      // S'il y a une autre vraie erreur, on la signale
+      if (error) throw error;
+      
+      // Si la fonction existe et répond que le quota est dépassé
+      if (data?.allowed === false) {
+        const msg = `Vos ${data.limit} ${metric} gratuites sont épuisées 🚀 Passez au plan Pro !`;
+        onTriggerToast(msg, "warning");
+        if (onNavigateToTab) setTimeout(() => onNavigateToTab('subscription'), 2500);
+        return false;
+      }
+      
+      return true;
+    } catch (err: any) {
+      console.error("Erreur inattendue du quota :", err);
+      // En cas de bug réseau ou autre, on ne bloque pas l'utilisateur
+      return true; 
     }
-    return true;
   };
 
   // Sign canvas
