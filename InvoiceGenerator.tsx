@@ -1160,7 +1160,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
               </div>
             </div>
 
-                                    {/* Print & Export Actions (PRODUCTION AVEC REDIRECTION) */}
+                                                {/* Print & Export Actions (PRODUCTION AVEC REDIRECTION REACT) */}
             <div className="grid grid-cols-2 gap-3 mt-6">
               
               {/* Bouton Impression Sécurisé */}
@@ -1171,7 +1171,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                     const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "factures" });
                     if (error) throw error;
                     
-                    // 2. Traitement du refus avec message dynamique et redirection
+                    // Traitement du refus avec message dynamique et redirection
                     if (data?.allowed === false) { 
                       const isFreePlan = data.limit === 5;
                       const msg = isFreePlan 
@@ -1180,15 +1180,17 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                       
                       onTriggerToast(msg, "warning");
                       
-                      // Redirection vers la page d'abonnement après 2.5 secondes
+                      // Redirection fluide (sans recharger la page) après 2.5 secondes
                       setTimeout(() => {
-                        window.location.href = '/subscription';
+                        if (onNavigateToTab) {
+                          onNavigateToTab('subscription');
+                        }
                       }, 2500);
                       
                       return; 
                     } 
                     
-                    // 3. Impression autorisée
+                    // Impression autorisée
                     onTriggerToast("Préparation de l'impression...", 'info');
                     await printInvoice(currentInvoice);
                     
@@ -1210,7 +1212,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                     const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "factures" });
                     if (error) throw error;
                     
-                    // 2. Traitement du refus avec message dynamique et redirection
+                    // Traitement du refus avec message dynamique et redirection
                     if (data?.allowed === false) { 
                       const isFreePlan = data.limit === 5;
                       const msg = isFreePlan 
@@ -1219,15 +1221,17 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
                       
                       onTriggerToast(msg, "warning");
                       
-                      // Redirection vers la page d'abonnement après 2.5 secondes
+                      // Redirection fluide (sans recharger la page) après 2.5 secondes
                       setTimeout(() => {
-                        window.location.href = '/subscription';
+                        if (onNavigateToTab) {
+                          onNavigateToTab('subscription');
+                        }
                       }, 2500);
                       
                       return; 
                     } 
                     
-                    // 3. Génération autorisée
+                    // Génération autorisée
                     onTriggerToast('Génération PDF en cours...', 'info');
                     await exportPDF(currentInvoice);
                     onTriggerToast('PDF téléchargé avec succès !', 'success');
@@ -1243,8 +1247,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
               </button>
 
             </div>
-
-            
+    
             <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
               <span>Statut Connexion POS : <strong className="text-emerald-400">En ligne (USB/Bluetooth)</strong></span>
               <span className="underline cursor-pointer hover:text-slate-200">Configurer Imprimante</span>
