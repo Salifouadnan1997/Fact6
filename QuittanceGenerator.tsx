@@ -304,7 +304,6 @@ export const QuittanceGenerator: React.FC<Props> = ({ currentInvoice, userId, on
   const reliquat = total - gn('montant_paye');
   const qrDataUrl = makeQR(`QT:${g('numero')}|${g('date_emission')}|${total}`);
 
-  // ═══ Export: Build standalone HTML with inline styles (no Tailwind dependency) ═══
   const buildExportHTML = () => {
     const c = info.color;
     const emName = g('nom_proprietaire')||g('nom_entreprise')||g('nom_societe')||g('nom_etablissement')||g('nom_clinique')||'—';
@@ -315,7 +314,22 @@ export const QuittanceGenerator: React.FC<Props> = ({ currentInvoice, userId, on
     const emLabel = type==='loyer'?'BAILLEUR':type==='sante'?'ÉTABLISSEMENT':type==='transport'?'TRANSPORTEUR':type==='education'?'ÉTABLISSEMENT':'ÉMETTEUR';
     const clLabel = type==='loyer'?'LOCATAIRE':type==='sante'?'PATIENT':type==='transport'?'EXPÉDITEUR':type==='education'?'ÉLÈVE / PARENT':'CLIENT';
 
-    // Build details lines
+    // Initialisation de la variable pour stocker les lignes financières
+    let finance = "";
+
+    // Logique spécifique au type "sante"
+    if (type === 'sante') {
+      if(gn('cout_consultation') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Consultation</span><span>${fmt(gn('cout_consultation'))}</span></div>`;
+      if(gn('frais_examens') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Examens</span><span>${fmt(gn('frais_examens'))}</span></div>`;
+      if(gn('frais_medicaments') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Médicaments</span><span>${fmt(gn('frais_medicaments'))}</span></div>`;
+    }
+
+    // Logique commune pour Taxes et Remises
+    if(gn('taxes') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;color:#666;"><span>Taxes</span><span>+${fmt(gn('taxes'))}</span></div>`;
+    if(gn('remise') > 0 || gn('reduction') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;color:#059669;"><span>Remise</span><span>-${fmt(gn('remise')||gn('reduction'))}</span></div>`;
+
+    // ... continuez ici avec le reste de votre return template (le HTML complet) ...
+
     let details = '';
     if (type==='loyer') {
       if(g('adresse_bien')) details += `<p>📍 Bien: <b>${g('adresse_bien')}</b></p>`;
