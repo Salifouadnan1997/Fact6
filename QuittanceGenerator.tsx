@@ -304,97 +304,115 @@ export const QuittanceGenerator: React.FC<Props> = ({ currentInvoice, userId, on
   const reliquat = total - gn('montant_paye');
   const qrDataUrl = makeQR(`QT:${g('numero')}|${g('date_emission')}|${total}`);
 
-  const buildExportHTML = () => {
+    const buildExportHTML = () => {
     const c = info.color;
-    const emName = g('nom_proprietaire')||g('nom_entreprise')||g('nom_societe')||g('nom_etablissement')||g('nom_clinique')||'—';
-    const emTel = g('telephone_proprietaire')||g('telephone')||'';
-    const emAddr = g('adresse_proprietaire')||g('adresse')||'';
-    const clName = g('nom_locataire')||g('nom_client')||g('nom_expediteur')||g('nom_etudiant')||g('nom_patient')||'—';
-    const clTel = g('telephone_locataire')||g('telephone_client')||g('telephone_expediteur')||g('telephone_parent')||g('telephone_patient')||'';
-    const emLabel = type==='loyer'?'BAILLEUR':type==='sante'?'ÉTABLISSEMENT':type==='transport'?'TRANSPORTEUR':type==='education'?'ÉTABLISSEMENT':'ÉMETTEUR';
-    const clLabel = type==='loyer'?'LOCATAIRE':type==='sante'?'PATIENT':type==='transport'?'EXPÉDITEUR':type==='education'?'ÉLÈVE / PARENT':'CLIENT';
-
-    // Initialisation de la variable pour stocker les lignes financières
-    let finance = "";
-
-    // Logique spécifique au type "sante"
-    if (type === 'sante') {
-      if(gn('cout_consultation') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Consultation</span><span>${fmt(gn('cout_consultation'))}</span></div>`;
-      if(gn('frais_examens') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Examens</span><span>${fmt(gn('frais_examens'))}</span></div>`;
-      if(gn('frais_medicaments') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Médicaments</span><span>${fmt(gn('frais_medicaments'))}</span></div>`;
-    }
-
-    // Logique commune pour Taxes et Remises
-    if(gn('taxes') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;color:#666;"><span>Taxes</span><span>+${fmt(gn('taxes'))}</span></div>`;
-    if(gn('remise') > 0 || gn('reduction') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;color:#059669;"><span>Remise</span><span>-${fmt(gn('remise')||gn('reduction'))}</span></div>`;
-
-    // ... continuez ici avec le reste de votre return template (le HTML complet) ...
-
-    let details = '';
-    if (type==='loyer') {
-      if(g('adresse_bien')) details += `<p>📍 Bien: <b>${g('adresse_bien')}</b></p>`;
-      if(g('type_logement')) details += `<p>🏠 Type: ${g('type_logement')} ${g('numero_appartement')?'N°'+g('numero_appartement'):''}</p>`;
-      if(g('ville')) details += `<p>🌍 ${g('ville')} ${g('pays')?'— '+g('pays'):''}</p>`;
-      if(g('periode_concernee')) details += `<p>📅 Période: ${g('periode_concernee')}</p>`;
-    } else if (type==='service') {
-      if(g('type_service')) details += `<p>🔧 Service: <b>${g('type_service')}</b></p>`;
-      if(g('description_service')) details += `<p>📝 ${g('description_service')}</p>`;
-      if(g('duree_prestation')) details += `<p>⏱️ Durée: ${g('duree_prestation')}</p>`;
-    } else if (type==='transport') {
-      if(g('ville_depart')||g('ville_arrivee')) details += `<p>🚚 Trajet: ${g('ville_depart')||'___'} → ${g('ville_arrivee')||'___'}</p>`;
-      if(g('type_marchandise')) details += `<p>📦 ${g('type_marchandise')}</p>`;
-      if(g('poids')) details += `<p>⚖️ Poids: ${g('poids')}</p>`;
-      if(g('chauffeur')) details += `<p>👤 Chauffeur: ${g('chauffeur')}</p>`;
-      if(g('numero_vehicule')) details += `<p>🚗 Véhicule: ${g('numero_vehicule')}</p>`;
-      if(g('nom_destinataire')) details += `<p>📬 Destinataire: ${g('nom_destinataire')} ${g('telephone_destinataire')?'— '+g('telephone_destinataire'):''}</p>`;
-    } else if (type==='education') {
-      if(g('nom_etudiant')) details += `<p>🎓 Élève: <b>${g('nom_etudiant')}</b></p>`;
-      if(g('matricule')) details += `<p>🔢 Matricule: ${g('matricule')}</p>`;
-      if(g('classe')) details += `<p>📚 Classe: ${g('classe')} ${g('filiere')?'— '+g('filiere'):''}</p>`;
-      if(g('annee_scolaire')) details += `<p>📅 Année: ${g('annee_scolaire')}</p>`;
-      if(g('type_frais')) details += `<p>💰 ${g('type_frais')}</p>`;
-    } else if (type==='sante') {
-      if(g('nom_patient')) details += `<p>🩺 Patient: <b>${g('nom_patient')}</b> ${g('sexe')?'('+g('sexe')+')':''}</p>`;
-      if(g('medecin')) details += `<p>👨‍⚕️ Dr. ${g('medecin')}</p>`;
-      if(g('type_prestation')) details += `<p>💊 ${g('type_prestation')}</p>`;
-      if(g('assurance_sante')) details += `<p>🛡️ Assurance: ${g('assurance_sante')}</p>`;
-    } else {
-      if(g('objet_paiement')) details += `<p>📝 ${g('objet_paiement')}</p>`;
-      if(g('description')) details += `<p>${g('description')}</p>`;
-    }
-
-    // Build financial lines
-    let finance = '';
-    if (type==='loyer') {
-      if(gn('montant_loyer')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Loyer</span><span>${fmt(gn('montant_loyer'))}</span></div>`;
-      if(gn('charges_locatives')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Charges</span><span>${fmt(gn('charges_locatives'))}</span></div>`;
-      if(gn('caution')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Caution</span><span>${fmt(gn('caution'))}</span></div>`;
-    } else if (type==='transport') {
-      if(gn('frais_transport')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Frais transport</span><span>${fmt(gn('frais_transport'))}</span></div>`;
-      if(gn('assurance')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Assurance</span><span>${fmt(gn('assurance'))}</span></div>`;
-    } else if (type==='sante') {
-      if(gn('cout_consultation')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Consultation</span><span>${fmt(gn('cout_consultation'))}</span></div>`;
-      if(gn('frais_examens')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Examens</span><span>${fmt(gn('frais_examens'))}</span></div>`;
-      if(gn('frais_medicaments')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Médicaments</span><span>${fmt(gn('frais_medicaments'))}</span></div>`;
-    }
-    if(gn('taxes')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;color:#666;"><span>Taxes</span><span>+${fmt(gn('taxes'))}</span></div>`;
-    if(gn('remise')>0||gn('reduction')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;color:#059669;"><span>Remise</span><span>-${fmt(gn('remise')||gn('reduction'))}</span></div>`;
-
-      // --- UTILS : Logique partagée ---
-  const checkQuota = async (): Promise<boolean> => {
-    const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "quittances" });
-    if (error) throw error;
+    const emName = g('nom_proprietaire') || g('nom_entreprise') || g('nom_societe') || g('nom_etablissement') || g('nom_clinique') || '—';
+    const emTel = g('telephone_proprietaire') || g('telephone') || '';
+    const emAddr = g('adresse_proprietaire') || g('adresse') || '';
+    const clName = g('nom_locataire') || g('nom_client') || g('nom_expediteur') || g('nom_etudiant') || g('nom_patient') || '—';
+    const clTel = g('telephone_locataire') || g('telephone_client') || g('telephone_expediteur') || g('telephone_parent') || g('telephone_patient') || '';
     
-    if (data?.allowed === false) {
-      const isFreePlan = data.limit === 5;
-      const msg = isFreePlan 
-        ? "Vos 5 quittances gratuites sont épuisées 🚀 Passez au plan Pro !" 
-        : "Votre abonnement est épuisé. Renouvelez-le pour continuer.";
-      onTriggerToast(msg, "warning");
-      setTimeout(() => { if (onNavigateToTab) onNavigateToTab('subscription'); }, 2500);
-      return false;
+    // Labels dynamiques selon le type
+    const emLabel = type === 'loyer' ? 'BAILLEUR' 
+                  : type === 'sante' ? 'ÉTABLISSEMENT' 
+                  : type === 'transport' ? 'TRANSPORTEUR' 
+                  : type === 'education' ? 'ÉTABLISSEMENT' 
+                  : type === 'freelance' ? 'PRESTATAIRE' 
+                  : type === 'abonnement' ? 'ORGANISATION' 
+                  : 'ÉMETTEUR';
+
+    const clLabel = type === 'loyer' ? 'LOCATAIRE' 
+                  : type === 'sante' ? 'PATIENT' 
+                  : type === 'transport' ? 'EXPÉDITEUR' 
+                  : type === 'education' ? 'ÉLÈVE / PARENT' 
+                  : type === 'freelance' ? 'CLIENT' 
+                  : type === 'abonnement' ? 'ABONNÉ' 
+                  : 'CLIENT';
+
+    // Initialisation
+    let finance = "";
+    let details = "";
+    const qr = makeQR(`QT:${g('numero')}|${g('date_emission')}|${total}`);
+
+    // --- Logique financière ---
+    if (type === 'sante') {
+      if (gn('cout_consultation') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Consultation</span><span>${fmt(gn('cout_consultation'))}</span></div>`;
+      if (gn('frais_examens') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Examens</span><span>${fmt(gn('frais_examens'))}</span></div>`;
+      if (gn('frais_medicaments') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Médicaments</span><span>${fmt(gn('frais_medicaments'))}</span></div>`;
     }
-    return true;
+    if (gn('taxes') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;color:#666;"><span>Taxes</span><span>+${fmt(gn('taxes'))}</span></div>`;
+    if (gn('remise') > 0 || gn('reduction') > 0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;color:#059669;"><span>Remise</span><span>-${fmt(gn('remise') || gn('reduction'))}</span></div>`;
+
+    // --- Logique détails ---
+    if (type === 'loyer') {
+      if (g('adresse_bien')) details += `<p style="margin:2px 0;">📍 Bien: <b>${g('adresse_bien')}</b></p>`;
+      if (g('type_logement')) details += `<p style="margin:2px 0;">🏠 Type: ${g('type_logement')} ${g('numero_appartement') ? 'N°' + g('numero_appartement') : ''}</p>`;
+      if (g('ville')) details += `<p style="margin:2px 0;">🌍 ${g('ville')} ${g('pays') ? '— ' + g('pays') : ''}</p>`;
+      if (g('periode_concernee')) details += `<p style="margin:2px 0;">📅 Période: ${g('periode_concernee')}</p>`;
+    } else if (type === 'service') {
+      if (g('type_service')) details += `<p style="margin:2px 0;">🔧 Service: <b>${g('type_service')}</b></p>`;
+      if (g('description_service')) details += `<p style="margin:2px 0;">📝 ${g('description_service')}</p>`;
+      if (g('duree_prestation')) details += `<p style="margin:2px 0;">⏱️ Durée: ${g('duree_prestation')}</p>`;
+    } else if (type === 'sante') {
+      if (g('motif_consultation')) details += `<p style="margin:2px 0;">🩺 Motif: <b>${g('motif_consultation')}</b></p>`;
+    } else if (type === 'transport') {
+      if (g('trajet')) details += `<p style="margin:2px 0;">📍 Trajet: <b>${g('trajet')}</b></p>`;
+      if (g('vehicule')) details += `<p style="margin:2px 0;">🚌 Véhicule: ${g('vehicule')}</p>`;
+    } else if (type === 'education') {
+      if (g('libelle_frais')) details += `<p style="margin:2px 0;">📚 Frais: <b>${g('libelle_frais')}</b></p>`;
+      if (g('classe')) details += `<p style="margin:2px 0;">🎓 Classe: ${g('classe')}</p>`;
+    } else if (type === 'commercial') {
+      if (g('designation')) details += `<p style="margin:2px 0;">📦 Produit: <b>${g('designation')}</b></p>`;
+      if (g('reference')) details += `<p style="margin:2px 0;">🏷️ Réf: ${g('reference')}</p>`;
+    } else if (type === 'freelance') {
+      if (g('nom_projet')) details += `<p style="margin:2px 0;">🚀 Projet: <b>${g('nom_projet')}</b></p>`;
+      if (g('taux_horaire')) details += `<p style="margin:2px 0;">💰 Taux: ${g('taux_horaire')}</p>`;
+      if (g('duree_travail')) details += `<p style="margin:2px 0;">⏳ Durée: ${g('duree_travail')}</p>`;
+    } else if (type === 'abonnement') {
+      if (g('libelle_abonnement')) details += `<p style="margin:2px 0;">🔄 Abonnement: <b>${g('libelle_abonnement')}</b></p>`;
+      if (g('date_debut')) details += `<p style="margin:2px 0;">📅 Période: Du ${g('date_debut')} au ${g('date_fin')}</p>`;
+      if (g('id_membre')) details += `<p style="margin:2px 0;">🆔 N° Membre: ${g('id_membre')}</p>`;
+    }
+
+    return `<div style="width:500px;padding:20px;background:#fff;font-family:Helvetica,Arial,sans-serif;font-size:10px;color:#1e293b;">
+      <table style="width:100%;margin-bottom:10px;border-bottom:3px solid ${c};padding-bottom:8px;" cellpadding="0" cellspacing="0"><tr>
+        <td style="width:55px;vertical-align:middle;text-align:left;"><img src="${qr}" style="width:50px;height:50px;" /></td>
+        <td style="text-align:center;vertical-align:middle;padding:0 8px;">
+          <div style="font-size:16px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:${c};">${info.label}</div>
+          <div style="font-size:9px;color:#666;margin-top:3px;">N° <b>${g('numero')}</b> — ${g('date_emission')}</div>
+        </td>
+        <td style="width:55px;vertical-align:middle;text-align:right;">${logoUrl ? `<img src="${logoUrl}" style="width:50px;height:50px;object-fit:contain;border-radius:6px;" />` : ''}</td>
+      </tr></table>
+      <table style="width:100%;margin-bottom:12px;border:1px solid ${c}40;border-radius:6px;overflow:hidden;" cellpadding="0" cellspacing="0"><tr>
+        <td style="width:50%;vertical-align:top;padding:8px;background:${c}08;border-right:1px solid ${c}30;">
+          <div style="font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:${c};margin-bottom:3px;">${emLabel}</div>
+          <div style="font-weight:bold;font-size:11px;">${emName}</div>
+          ${emAddr ? `<div style="font-size:9px;color:#555;">${emAddr}</div>` : ''}
+          ${emTel ? `<div style="font-size:9px;color:#555;">Tél: ${emTel}</div>` : ''}
+          ${g('rccm') ? `<div style="font-size:8px;color:#888;">RCCM: ${g('rccm')}</div>` : ''}
+          ${g('ifu') ? `<div style="font-size:8px;color:#888;">IFU: ${g('ifu')}</div>` : ''}
+        </td>
+        <td style="width:50%;vertical-align:top;padding:8px;">
+          <div style="font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:${c};margin-bottom:3px;">${clLabel}</div>
+          <div style="font-weight:bold;font-size:11px;">${clName}</div>
+          ${clTel ? `<div style="font-size:9px;color:#555;">Tél: ${clTel}</div>` : ''}
+        </td>
+      </tr></table>
+      ${details ? `<div style="margin-bottom:10px;padding:8px;border-radius:6px;border:1px solid ${c}30;background:${c}06;font-size:9px;line-height:1.6;">${details}</div>` : ''}
+      <div style="margin-bottom:10px;padding:8px;border:1px solid ${c}40;border-radius:6px;font-size:9px;">
+        ${finance}
+        <div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:2px solid ${c};font-size:14px;font-weight:900;color:${c};"><span>TOTAL TTC</span><span>${fmt(total)}</span></div>
+        ${gn('montant_paye') > 0 ? `<div style="display:flex;justify-content:space-between;margin-top:4px;padding:3px 6px;background:#e6f7e6;border-radius:4px;font-size:9px;"><span style="color:#155724;">Payé (${g('mode_paiement') || '—'})</span><b style="color:#155724;">${fmt(gn('montant_paye'))}</b></div>` : ''}
+        ${reliquat > 0 ? `<div style="display:flex;justify-content:space-between;margin-top:3px;padding:4px 6px;background:#fef2f2;border:1px solid #fca5a5;border-radius:4px;font-weight:900;color:#b91c1c;"><span>RESTE À PAYER</span><span>${fmt(reliquat)}</span></div>` : ''}
+      </div>
+      ${(stampUrl || signUrl) ? `<div style="position:relative;min-height:60px;margin:8px 0;padding-top:6px;border-top:1px dashed ${c}40;">
+        ${stampUrl ? `<img src="${stampUrl}" style="position:absolute;left:${stampPos.x}%;top:5px;width:${60 * stampScale}px;height:${60 * stampScale}px;object-fit:contain;transform:translateX(-50%) rotate(${stampRot}deg);" />` : ''}
+        ${signUrl ? `<img src="${signUrl}" style="position:absolute;left:${signPos.x}%;top:5px;width:${80 * signScale}px;height:${45 * signScale}px;object-fit:contain;transform:translateX(-50%) rotate(${signRot}deg);" />` : ''}
+      </div>` : ''}
+      <div style="margin-top:10px;padding-top:6px;border-top:1px dashed #ccc;text-align:center;font-size:7px;color:#999;">
+        <b>FACTUREset — Plateforme SaaS</b> · Contact: +2290166336546
+      </div>
+    </div>`;
   };
 
   const prepareElement = async () => {
