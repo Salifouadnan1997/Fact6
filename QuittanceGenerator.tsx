@@ -402,6 +402,41 @@ export const QuittanceGenerator: React.FC<Props> = ({ currentInvoice, userId, on
     return el.firstElementChild as HTMLElement;
   };
 
+    // --- UTILS : Logique partagée ---
+  const checkQuota = async (): Promise<boolean> => {
+    const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "quittances" });
+    if (error) throw error;
+    
+    if (data?.allowed === false) {
+      const isFreePlan = data.limit === 5;
+      const msg = isFreePlan 
+        ? "Vos 5 quittances gratuites sont épuisées 🚀 Passez au plan Pro !" 
+        : "Votre abonnement est épuisé. Renouvelez-le pour continuer.";
+      onTriggerToast(msg, "warning");
+      setTimeout(() => { if (onNavigateToTab) onNavigateToTab('subscription'); }, 2500);
+      return false;
+    }
+    return true;
+  };
+
+  const prepareElement = async () => {
+    let el = document.getElementById('__qt_r') as HTMLDivElement;
+    if (!el) { 
+      el = document.createElement('div'); 
+      el.id = '__qt_r'; 
+      el.style.cssText = 'position:fixed;left:-4000px;top:0;z-index:-1;background:#fff;'; 
+      document.body.appendChild(el); 
+    }
+    el.innerHTML = buildExportHTML();
+    
+    const imgs = el.querySelectorAll('img');
+    await Promise.all(Array.from(imgs).map(i => i.complete ? Promise.resolve() : new Promise<void>(r => { 
+      i.onload = () => r(); i.onerror = () => r(); setTimeout(r, 1500); 
+    })));
+    
+    return el.firstElementChild as HTMLElement;
+  };
+
   // --- HANDLERS ---
 
   const handlePDF = async () => {
@@ -446,10 +481,6 @@ export const QuittanceGenerator: React.FC<Props> = ({ currentInvoice, userId, on
       onTriggerToast('Erreur impression: ' + (e as Error).message, 'warning');
     }
   };
-
-  const handlePrint = async () => {
-    const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "quittances" });
-    if (error) throw error;
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5">
