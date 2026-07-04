@@ -1160,42 +1160,71 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({
               </div>
             </div>
 
-            {/* Print & Export Actions */}
+                        {/* Print & Export Actions (PRODUCTION) */}
             <div className="grid grid-cols-2 gap-3 mt-6">
-                            <div className="grid grid-cols-2 gap-3 mt-6">
-  {/* Bouton Impression */}
-  <button 
-    onClick={async () => {
-      onTriggerToast('Impression en cours...', 'info');
-      try {
-        await printInvoice(currentInvoice);
-      } catch (e) { 
-        onTriggerToast('Erreur impression: ' + (e as Error).message, 'warning'); 
-      }
-    }}
-    className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2"
-  >
-    <Printer className="w-4 h-4" />
-    <span>Imprimer Ticket</span>
-  </button>
+              
+              {/* Bouton Impression Sécurisé */}
+              <button 
+                onClick={async () => {
+                  onTriggerToast("Vérification de l'abonnement...", 'info');
+                  try {
+                    // 1. Vérification du quota en base de données
+                    const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "factures" });
+                    
+                    if (error) throw error;
+                    
+                    // 2. Traitement du refus
+                    if (data?.allowed === false) { 
+                      onTriggerToast(`Abonnement requis : Quota dépassé (${data.used}/${data.limit}).`, "warning");
+                      return; // On stoppe l'impression
+                    } 
+                    
+                    // 3. Impression autorisée
+                    onTriggerToast("Préparation de l'impression...", 'info');
+                    await printInvoice(currentInvoice);
+                    
+                  } catch (e) { 
+                    onTriggerToast('Erreur serveur: ' + (e as Error).message, 'warning'); 
+                  }
+                }}
+                className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Imprimer Ticket</span>
+              </button>
 
-  {/* Bouton PDF */}
-  <button 
-    onClick={async () => {
-      onTriggerToast('Génération PDF...', 'info');
-      try {
-        await exportPDF(currentInvoice);
-        onTriggerToast('PDF prêt !', 'success');
-      } catch (e) { 
-        onTriggerToast('Erreur PDF: ' + (e as Error).message, 'warning'); 
-      }
-    }}
-    className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-3 px-4 rounded-xl transition-all border border-slate-700 flex items-center justify-center space-x-2"
-  >
-    <Download className="w-4 h-4 text-blue-400" />
-    <span>Télécharger PDF</span>
-  </button>
-</div>
+              {/* Bouton PDF Sécurisé */}
+              <button 
+                onClick={async () => {
+                  onTriggerToast("Vérification de l'abonnement...", 'info');
+                  try {
+                    // 1. Vérification du quota en base de données
+                    const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "factures" });
+                    
+                    if (error) throw error;
+                    
+                    // 2. Traitement du refus
+                    if (data?.allowed === false) { 
+                      onTriggerToast(`Abonnement requis : Quota dépassé (${data.used}/${data.limit}).`, "warning");
+                      return; // On stoppe la génération
+                    } 
+                    
+                    // 3. Génération autorisée
+                    onTriggerToast('Génération PDF en cours...', 'info');
+                    await exportPDF(currentInvoice);
+                    onTriggerToast('PDF téléchargé avec succès !', 'success');
+                    
+                  } catch (e) { 
+                    onTriggerToast('Erreur serveur: ' + (e as Error).message, 'warning'); 
+                  }
+                }}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-3 px-4 rounded-xl transition-all border border-slate-700 flex items-center justify-center space-x-2"
+              >
+                <Download className="w-4 h-4 text-blue-400" />
+                <span>Télécharger PDF</span>
+              </button>
+
+            </div>
 
 
             </div>
