@@ -181,17 +181,23 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
   const onDM = (e: React.MouseEvent|React.TouchEvent) => { if (!dragging||!containerRef.current) return; const r=containerRef.current.getBoundingClientRect(); const cx='touches' in e?e.touches[0].clientX:e.clientX; const cy='touches' in e?e.touches[0].clientY:e.clientY; setOverlays(p=>p.map(o=>o.id===dragging?{...o,x:Math.max(5,Math.min(95,((cx-r.left)/r.width)*100)),y:Math.max(5,Math.min(95,((cy-r.top)/r.height)*100))}:o)); };
   const onDE = () => setDragging(null);
 
-  const handleExport = async () => {
+    const handleExport = async () => {
     if (pages.length === 0) return;
     
     // Vérification quota
     const isAuthorized = await checkQuota('signatures');
     if (!isAuthorized) return;
 
-    onTriggerToast('Génération du document signé...', 'info');
+    onTriggerToast('Génération du document...', 'info');
+    
     try {
       let el = document.getElementById('__ds_render') as HTMLDivElement;
-      if (!el) { el = document.createElement('div'); el.id = '__ds_render'; el.style.cssText = 'position:fixed;left:-4000px;top:0;z-index:-1;background:#fff;'; document.body.appendChild(el); }
+      if (!el) { 
+        el = document.createElement('div'); 
+        el.id = '__ds_render'; 
+        el.style.cssText = 'position:fixed;left:-4000px;top:0;z-index:-1;background:#fff;'; 
+        document.body.appendChild(el); 
+      }
 
       const pageImg = pages[currentPage];
       let overlayHTML = '';
@@ -206,23 +212,30 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
 
       const target = el.firstElementChild as HTMLElement;
       const imgs = target.querySelectorAll('img');
+      
+      // Attente chargement images
       await Promise.all(Array.from(imgs).map(img =>
         img.complete ? Promise.resolve() : new Promise<void>(r => { img.onload = () => r(); img.onerror = () => r(); setTimeout(r, 3000); })
       ));
       await new Promise(r => setTimeout(r, 200));
 
-      const cv = await html2canvas(target, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fff', logging: false });
-      const imgData = cv.toDataURL('image/jpeg', 0.92);
+      // Scale 1.5 au lieu de 2 pour éviter le crash mémoire sur mobile
+      const cv = await html2canvas(target, { scale: 1.5, useCORS: true, allowTaint: true, backgroundColor: '#fff', logging: false });
+      
+      const imgData = cv.toDataURL('image/jpeg', 0.85); // Légère compression pour mobile
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pw = 190, ph = 277, ratio = cv.width / cv.height;
       let fw = pw, fh = pw / ratio;
       if (fh > ph) { fh = ph; fw = ph * ratio; }
+      
       pdf.addImage(imgData, 'JPEG', (210 - fw) / 2, 10, fw, fh);
       pdf.save(`signe_${docName || 'document'}.pdf`);
-      onTriggerToast('Document signé téléchargé !', 'success');
-    } catch (e) {
+      
+      onTriggerToast('Document téléchargé !', 'success');
+    } catch (e: any) {
       console.error('Export error:', e);
-      onTriggerToast('Erreur: ' + (e as Error).message, 'warning');
+      // Alerte visuelle en cas d'échec sur mobile
+      onTriggerToast('Erreur export: ' + (e.message || 'Impossible de générer le PDF'), 'warning');
     }
   };
 
