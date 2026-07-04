@@ -4,6 +4,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Invoice } from './types';
+import { supabase } from './src/config/supabaseClient';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs`;
 
@@ -63,20 +64,24 @@ function genStamp(text: string, style: string, color: string): string {
 const COLORS = ['#dc2626','#1e40af','#059669','#7c3aed','#d97706','#0f172a','#be185d','#0284c7'];
 const STYLES = [{id:'classic',l:'▭ Classique'},{id:'round',l:'○ Rond'},{id:'square',l:'□ Carré'},{id:'elegant',l:'◇ Élégant'}];
 
-interface Props { currentInvoice: Invoice; onTriggerToast: (m: string, t?: 'success'|'warning'|'info') => void; }
-interface Overlay { id: string; type: 'stamp'|'signature'; src: string; x: number; y: number; scale: number; }
+interface Props { 
+  currentInvoice: Invoice; 
+  userId: string; 
+  onTriggerToast: (m: string, t?: 'success'|'warning'|'info') => void; 
+  onNavigateToTab?: (tab: string) => void;
+}
 
-export const DocumentSigner: React.FC<Props> = ({ currentInvoice, onTriggerToast }) => {
+export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTriggerToast, onNavigateToTab }) => {
   const [pages, setPages] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [docName, setDocName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [overlays, setOverlays] = useState<Overlay[]>([]);
+  const [overlays, setOverlays] = useState<any[]>([]);
   const [dragging, setDragging] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const signCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Stamp/Sign config
+  // Tools state
   const [showTools, setShowTools] = useState(false);
   const [toolTab, setToolTab] = useState<'stamp'|'sign'>('stamp');
   const [stampText, setStampText] = useState('PAYÉ');
@@ -88,7 +93,26 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, onTriggerToast
   const [hasDrawn, setHasDrawn] = useState(false);
   const [signColor, setSignColor] = useState('#1e293b');
 
-  // Init signature canvas
+  // Quota guard
+  const checkQuota = async (metric: string): Promise<boolean> => {
+    const { data, error } = await supabase.rpc("check_and_increment", { 
+      p_user_id: userId, 
+      p_metric: metric 
+    });
+    
+    if (error) throw error;
+    
+    if (data?.allowed === false) {
+      // Message dynamique basé sur la limite renvoyée par la DB
+      const msg = `Vos ${data.limit} ${metric} gratuites sont épuisées 🚀 Passez au plan Pro !`;
+      onTriggerToast(msg, "warning");
+      if (onNavigateToTab) setTimeout(() => onNavigateToTab('subscription'), 2500);
+      return false;
+    }
+    return true;
+  };
+
+  // Sign canvas
   useEffect(() => {
     const cv = signCanvasRef.current; if (!cv) return;
     const ctx = cv.getContext('2d'); if (!ctx) return;
@@ -119,7 +143,7 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, onTriggerToast
   const clearCanvas = () => { const cv = signCanvasRef.current; if (!cv) return; const ctx = cv.getContext('2d'); if (!ctx) return; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); setHasDrawn(false); };
   const saveSign = async () => { const cv = signCanvasRef.current; if (!cv) return; const cleaned = await removeBg(cv.toDataURL('image/png')); setSignImg(cleaned); onTriggerToast('Signature enregistrée !', 'success'); };
 
-  // Import handlers
+  // Handlers
   const handleImportDoc = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
     setDocName(file.name); setOverlays([]); setCurrentPage(0);
@@ -159,9 +183,13 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, onTriggerToast
 
   const handleExport = async () => {
     if (pages.length === 0) return;
+    
+    // Vérification quota
+    const isAuthorized = await checkQuota('signatures');
+    if (!isAuthorized) return;
+
     onTriggerToast('Génération du document signé...', 'info');
     try {
-      // Build standalone HTML with inline styles in hidden container
       let el = document.getElementById('__ds_render') as HTMLDivElement;
       if (!el) { el = document.createElement('div'); el.id = '__ds_render'; el.style.cssText = 'position:fixed;left:-4000px;top:0;z-index:-1;background:#fff;'; document.body.appendChild(el); }
 
@@ -177,8 +205,6 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, onTriggerToast
       </div>`;
 
       const target = el.firstElementChild as HTMLElement;
-
-      // Wait for all images to load
       const imgs = target.querySelectorAll('img');
       await Promise.all(Array.from(imgs).map(img =>
         img.complete ? Promise.resolve() : new Promise<void>(r => { img.onload = () => r(); img.onerror = () => r(); setTimeout(r, 3000); })
@@ -202,6 +228,11 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, onTriggerToast
 
   const handlePrint = async () => {
     if (pages.length === 0) return;
+    
+    // Vérification quota
+    const isAuthorized = await checkQuota('signatures');
+    if (!isAuthorized) return;
+
     onTriggerToast('Préparation impression...', 'info');
     try {
       let el = document.getElementById('__ds_render') as HTMLDivElement;
@@ -228,12 +259,12 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, onTriggerToast
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-5">
+      {/* ... Votre JSX reste inchangé ... */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center space-x-2 mb-1"><FileUp className="w-5 h-5 text-blue-600" /><h1 className="text-lg font-extrabold text-slate-900">Signer un Document</h1></div>
         <p className="text-xs text-slate-500">Importez PDF ou image, configurez cachet/signature, puis positionnez et téléchargez.</p>
       </div>
 
-      {/* Actions */}
       <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center gap-2">
         <label className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm cursor-pointer flex items-center space-x-1.5">
           <FileUp className="w-4 h-4" /><span>Importer</span>
@@ -250,7 +281,6 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, onTriggerToast
         </button>
       </div>
 
-      {/* ═══ STAMP & SIGNATURE TOOLS ═══ */}
       {showTools && (
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-4 animate-fadeIn">
           <div className="flex bg-slate-100 rounded-xl p-1">
@@ -330,7 +360,6 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, onTriggerToast
         </div>
       )}
 
-      {/* Loading */}
       {loading && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-center justify-center space-x-3">
           <div className="w-5 h-5 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin"></div>
@@ -338,7 +367,6 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, onTriggerToast
         </div>
       )}
 
-      {/* Document display */}
       {pages.length > 0 ? (
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-3">
@@ -392,3 +420,5 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, onTriggerToast
     </div>
   );
 };
+
+
