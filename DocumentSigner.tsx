@@ -1,3 +1,4 @@
+const fileInputRef = useRef<HTMLInputElement>(null); 
 import { useState, useRef, useEffect } from 'react';
 import { FileUp, Stamp, PenTool, Download, Trash2, Move, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Upload, Check, RotateCcw } from 'lucide-react';
 import html2canvas from 'html2canvas';
@@ -301,6 +302,7 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
       </div>
 
       {showTools && (
+            {showTools && (
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-4 animate-fadeIn">
           <div className="flex bg-slate-100 rounded-xl p-1">
             <button onClick={() => setToolTab('stamp')} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center space-x-1.5 ${toolTab==='stamp'?'bg-white text-rose-600 shadow-sm':'text-slate-500'}`}><Stamp className="w-4 h-4" /><span>Cachet</span></button>
@@ -331,15 +333,36 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
                     className="w-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold py-2 rounded-xl shadow-sm flex items-center justify-center space-x-1.5"><Check className="w-4 h-4" /><span>Générer ce cachet</span></button>
                 </div>
               )}
-              <label className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold py-2 rounded-xl border border-slate-200 flex items-center justify-center space-x-1 cursor-pointer">
+              
+              {/* BOUTON CORRIGÉ : Importation d'une image de TAMPON (adapté mobile) */}
+              <button 
+                onClick={() => document.getElementById('stamp-upload-input')?.click()} 
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold py-2 rounded-xl border border-slate-200 flex items-center justify-center space-x-1"
+              >
                 <Upload className="w-3 h-3" /><span>Ou importer un tampon (image)</span>
-                <input type="file" accept="image/*" className="hidden" onChange={async e => { const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=async ev=>{setStampImg(await removeBg(ev.target?.result as string)); onTriggerToast('Importé !','success');}; r.readAsDataURL(f); }} />
-              </label>
+              </button>
+              <input 
+                id="stamp-upload-input"
+                type="file" 
+                accept="image/*" 
+                className="hidden" 
+                onChange={async e => { 
+                  const f = e.target.files?.[0]; 
+                  if (!f) return; 
+                  const r = new FileReader(); 
+                  r.onload = async ev => {
+                    setStampImg(await removeBg(ev.target?.result as string)); 
+                    onTriggerToast('Tampon importé !', 'success');
+                  }; 
+                  r.readAsDataURL(f); 
+                }} 
+              />
+
             </div>
           )}
 
           {toolTab === 'sign' && (
-            <div className="space-y-3">
+             <div className="space-y-3">
               {signImg ? (
                 <div className="flex items-center space-x-3">
                   <img src={signImg} alt="Signature" className="w-24 h-14 object-contain bg-white rounded-lg border p-1" />
