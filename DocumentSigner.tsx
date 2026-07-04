@@ -181,13 +181,26 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
   const onDM = (e: React.MouseEvent|React.TouchEvent) => { if (!dragging||!containerRef.current) return; const r=containerRef.current.getBoundingClientRect(); const cx='touches' in e?e.touches[0].clientX:e.clientX; const cy='touches' in e?e.touches[0].clientY:e.clientY; setOverlays(p=>p.map(o=>o.id===dragging?{...o,x:Math.max(5,Math.min(95,((cx-r.left)/r.width)*100)),y:Math.max(5,Math.min(95,((cy-r.top)/r.height)*100))}:o)); };
   const onDE = () => setDragging(null);
 
-    const handleExport = async () => {
-    if (pages.length === 0) return;
+      const handleExport = async () => {
+    alert("Étape 1 : Début de l'exportation");
+    if (pages.length === 0) {
+      alert("Erreur : Aucune page à exporter");
+      return;
+    }
     
-    // Vérification quota
-    const isAuthorized = await checkQuota('signatures');
-    if (!isAuthorized) return;
+    alert("Étape 2 : Vérification du quota en cours...");
+    try {
+      const isAuthorized = await checkQuota('signatures');
+      if (!isAuthorized) {
+        alert("Erreur : Quota non autorisé ou épuisé");
+        return;
+      }
+    } catch (error: any) {
+      alert("CRASH à l'étape 2 (Supabase) : " + error.message);
+      return;
+    }
 
+    alert("Étape 3 : Quota OK. Préparation du document...");
     onTriggerToast('Génération du document...', 'info');
     
     try {
@@ -210,19 +223,13 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
         ${overlayHTML}
       </div>`;
 
+      alert("Étape 4 : Lancement de html2canvas...");
       const target = el.firstElementChild as HTMLElement;
-      const imgs = target.querySelectorAll('img');
       
-      // Attente chargement images
-      await Promise.all(Array.from(imgs).map(img =>
-        img.complete ? Promise.resolve() : new Promise<void>(r => { img.onload = () => r(); img.onerror = () => r(); setTimeout(r, 3000); })
-      ));
-      await new Promise(r => setTimeout(r, 200));
-
-      // Scale 1.5 au lieu de 2 pour éviter le crash mémoire sur mobile
       const cv = await html2canvas(target, { scale: 1.5, useCORS: true, allowTaint: true, backgroundColor: '#fff', logging: false });
       
-      const imgData = cv.toDataURL('image/jpeg', 0.85); // Légère compression pour mobile
+      alert("Étape 5 : Lancement de jsPDF...");
+      const imgData = cv.toDataURL('image/jpeg', 0.85);
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pw = 190, ph = 277, ratio = cv.width / cv.height;
       let fw = pw, fh = pw / ratio;
@@ -231,11 +238,10 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
       pdf.addImage(imgData, 'JPEG', (210 - fw) / 2, 10, fw, fh);
       pdf.save(`signe_${docName || 'document'}.pdf`);
       
+      alert("Étape 6 : Succès ! Le document devrait se télécharger.");
       onTriggerToast('Document téléchargé !', 'success');
     } catch (e: any) {
-      console.error('Export error:', e);
-      // Alerte visuelle en cas d'échec sur mobile
-      onTriggerToast('Erreur export: ' + (e.message || 'Impossible de générer le PDF'), 'warning');
+      alert("CRASH Étape finale : " + (e.message || 'Erreur inconnue'));
     }
   };
 
