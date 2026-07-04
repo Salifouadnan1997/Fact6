@@ -366,108 +366,90 @@ export const QuittanceGenerator: React.FC<Props> = ({ currentInvoice, userId, on
     if(gn('taxes')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;color:#666;"><span>Taxes</span><span>+${fmt(gn('taxes'))}</span></div>`;
     if(gn('remise')>0||gn('reduction')>0) finance += `<div style="display:flex;justify-content:space-between;padding:2px 0;color:#059669;"><span>Remise</span><span>-${fmt(gn('remise')||gn('reduction'))}</span></div>`;
 
-    const qr = makeQR(`QT:${g('numero')}|${g('date_emission')}|${total}`);
-    return `<div style="width:500px;padding:20px;background:#fff;font-family:Helvetica,Arial,sans-serif;font-size:10px;color:#1e293b;">
-      <table style="width:100%;margin-bottom:10px;border-bottom:3px solid ${c};padding-bottom:8px;" cellpadding="0" cellspacing="0"><tr>
-        <td style="width:55px;vertical-align:middle;text-align:left;"><img src="${qr}" style="width:50px;height:50px;" /></td>
-        <td style="text-align:center;vertical-align:middle;padding:0 8px;">
-          <div style="font-size:16px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:${c};">${info.label}</div>
-          <div style="font-size:9px;color:#666;margin-top:3px;">N° <b>${g('numero')}</b> — ${g('date_emission')}</div>
-        </td>
-        <td style="width:55px;vertical-align:middle;text-align:right;">${logoUrl?`<img src="${logoUrl}" style="width:50px;height:50px;object-fit:contain;border-radius:6px;" />`:''}</td>
-      </tr></table>
-      <table style="width:100%;margin-bottom:12px;border:1px solid ${c}40;border-radius:6px;overflow:hidden;" cellpadding="0" cellspacing="0"><tr>
-        <td style="width:50%;vertical-align:top;padding:8px;background:${c}08;border-right:1px solid ${c}30;">
-          <div style="font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:${c};margin-bottom:3px;">${emLabel}</div>
-          <div style="font-weight:bold;font-size:11px;">${emName}</div>
-          ${emAddr?`<div style="font-size:9px;color:#555;">${emAddr}</div>`:''}
-          ${emTel?`<div style="font-size:9px;color:#555;">Tél: ${emTel}</div>`:''}
-          ${g('rccm')?`<div style="font-size:8px;color:#888;">RCCM: ${g('rccm')}</div>`:''}
-          ${g('ifu')?`<div style="font-size:8px;color:#888;">IFU: ${g('ifu')}</div>`:''}
-        </td>
-        <td style="width:50%;vertical-align:top;padding:8px;">
-          <div style="font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:${c};margin-bottom:3px;">${clLabel}</div>
-          <div style="font-weight:bold;font-size:11px;">${clName}</div>
-          ${clTel?`<div style="font-size:9px;color:#555;">Tél: ${clTel}</div>`:''}
-        </td>
-      </tr></table>
-      ${details?`<div style="margin-bottom:10px;padding:8px;border-radius:6px;border:1px solid ${c}30;background:${c}06;font-size:9px;line-height:1.6;">${details}</div>`:''}
-      <div style="margin-bottom:10px;padding:8px;border:1px solid ${c}40;border-radius:6px;font-size:9px;">
-        ${finance}
-        <div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:2px solid ${c};font-size:14px;font-weight:900;color:${c};"><span>TOTAL TTC</span><span>${fmt(total)}</span></div>
-        ${gn('montant_paye')>0?`<div style="display:flex;justify-content:space-between;margin-top:4px;padding:3px 6px;background:#e6f7e6;border-radius:4px;font-size:9px;"><span style="color:#155724;">Payé (${g('mode_paiement')||'—'})</span><b style="color:#155724;">${fmt(gn('montant_paye'))}</b></div>`:''}
-        ${reliquat>0?`<div style="display:flex;justify-content:space-between;margin-top:3px;padding:4px 6px;background:#fef2f2;border:1px solid #fca5a5;border-radius:4px;font-weight:900;color:#b91c1c;"><span>RESTE À PAYER</span><span>${fmt(reliquat)}</span></div>`:''}
-      </div>
-      ${(stampUrl||signUrl)?`<div style="position:relative;min-height:60px;margin:8px 0;padding-top:6px;border-top:1px dashed ${c}40;">
-        ${stampUrl?`<img src="${stampUrl}" style="position:absolute;left:${stampPos.x}%;top:5px;width:${60*stampScale}px;height:${60*stampScale}px;object-fit:contain;transform:translateX(-50%) rotate(${stampRot}deg);" />`:''}
-        ${signUrl?`<img src="${signUrl}" style="position:absolute;left:${signPos.x}%;top:5px;width:${80*signScale}px;height:${45*signScale}px;object-fit:contain;transform:translateX(-50%) rotate(${signRot}deg);" />`:''}
-      </div>`:''}
-      <div style="margin-top:10px;padding-top:6px;border-top:1px dashed #ccc;text-align:center;font-size:7px;color:#999;">
-        <b>FACTUREset — Plateforme SaaS</b> · Contact: +2290166336546
-      </div>
-    </div>`;
+      // --- UTILS : Logique partagée ---
+  const checkQuota = async (): Promise<boolean> => {
+    const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "quittances" });
+    if (error) throw error;
+    
+    if (data?.allowed === false) {
+      const isFreePlan = data.limit === 5;
+      const msg = isFreePlan 
+        ? "Vos 5 quittances gratuites sont épuisées 🚀 Passez au plan Pro !" 
+        : "Votre abonnement est épuisé. Renouvelez-le pour continuer.";
+      onTriggerToast(msg, "warning");
+      setTimeout(() => { if (onNavigateToTab) onNavigateToTab('subscription'); }, 2500);
+      return false;
+    }
+    return true;
   };
 
-  const handlePDF = async () => {
-  onTriggerToast('Génération PDF...', 'info');
-  try {
-    // Vérification quota quittances
-      onTriggerToast("DEBUG userId: " + String(userId), "info");
-    const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "quittances" }); if (error) { throw error; }
-    const d = data;
-    if (d?.allowed === false) {
-      if(d.error === "NO_ACTIVE_SUBSCRIPTION"){onTriggerToast("Aucun abonnement actif.","warning");}else if(d.error === "QUOTA_EXCEEDED"){onTriggerToast(`Quota dépassé (${d.used}/${d.limit})`,"warning");}else{onTriggerToast("Accès refusé.","warning");}
-      return;
-    }
-
-    // Render HTML in hidden container
+  const prepareElement = async () => {
     let el = document.getElementById('__qt_r') as HTMLDivElement;
-    if (!el) { el = document.createElement('div'); el.id='__qt_r'; el.style.cssText='position:fixed;left:-4000px;top:0;z-index:-1;background:#fff;'; document.body.appendChild(el); }
+    if (!el) { 
+      el = document.createElement('div'); 
+      el.id = '__qt_r'; 
+      el.style.cssText = 'position:fixed;left:-4000px;top:0;z-index:-1;background:#fff;'; 
+      document.body.appendChild(el); 
+    }
     el.innerHTML = buildExportHTML();
-    const target = el.firstElementChild as HTMLElement;
+    
+    // Attente des images
+    const imgs = el.querySelectorAll('img');
+    await Promise.all(Array.from(imgs).map(i => i.complete ? Promise.resolve() : new Promise<void>(r => { 
+      i.onload = () => r(); i.onerror = () => r(); setTimeout(r, 1500); 
+    })));
+    
+    return el.firstElementChild as HTMLElement;
+  };
 
-    // Wait images
-    const imgs = target.querySelectorAll('img');
-    await Promise.all(Array.from(imgs).map(i => i.complete ? Promise.resolve() : new Promise<void>(r => { i.onload=()=>r(); i.onerror=()=>r(); setTimeout(r,1500); })));
-    await new Promise(r => setTimeout(r, 100));
+  // --- HANDLERS ---
 
-    const cv = await html2canvas(target, { scale:2, useCORS:true, allowTaint:true, backgroundColor:'#fff', logging:false });
-    const imgData = cv.toDataURL('image/jpeg', 0.92);
-    const pdf = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
-    const pw=190, ph=277, ratio=cv.width/cv.height;
-    let fw=pw, fh=pw/ratio; if(fh>ph){fh=ph;fw=ph*ratio;}
-    pdf.addImage(imgData, 'JPEG', (210-fw)/2, 10, fw, fh);
-    pdf.save(`${g('numero')}.pdf`);
-    onTriggerToast('Quittance PDF téléchargée !','success');
-  } catch(e) { console.error('PDF Error:', e); onTriggerToast('Erreur génération PDF: ' + (e as Error).message, 'warning'); }
-};
+  const handlePDF = async () => {
+    onTriggerToast("Vérification de l'abonnement...", 'info');
+    try {
+      if (!(await checkQuota())) return;
+      
+      const target = await prepareElement();
+      const cv = await html2canvas(target, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fff', logging: false });
+      const imgData = cv.toDataURL('image/jpeg', 0.92);
+      
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pw = 190, ph = 277, ratio = cv.width / cv.height;
+      let fw = pw, fh = pw / ratio; 
+      if (fh > ph) { fh = ph; fw = ph * ratio; }
+      
+      pdf.addImage(imgData, 'JPEG', (210 - fw) / 2, 10, fw, fh);
+      pdf.save(`${g('numero')}.pdf`);
+      
+      onTriggerToast('Quittance PDF téléchargée !', 'success');
+    } catch (e) {
+      onTriggerToast('Erreur génération PDF: ' + (e as Error).message, 'warning');
+    }
+  };
 
+  const handlePrint = async () => {
+    onTriggerToast("Vérification de l'abonnement...", 'info');
+    try {
+      if (!(await checkQuota())) return;
 
+      onTriggerToast('Préparation impression...', 'info');
+      const target = await prepareElement();
+      const cv = await html2canvas(target, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#fff', logging: false });
+      const du = cv.toDataURL('image/png');
+      
+      const w = window.open('', '_blank');
+      if (w) {
+        w.document.write(`<!DOCTYPE html><html><head><title>${g('numero')}</title><style>body{margin:0;display:flex;justify-content:center;background:#fff;}img{max-width:100%;height:auto;}</style></head><body><img src="${du}" onload="setTimeout(function(){window.print();},400);"/></body></html>`);
+        w.document.close();
+      }
+    } catch (e) {
+      onTriggerToast('Erreur impression: ' + (e as Error).message, 'warning');
+    }
+  };
 
   const handlePrint = async () => {
     const { data, error } = await supabase.rpc("check_and_increment", { p_user_id: userId, p_metric: "quittances" });
     if (error) throw error;
-    if (data?.allowed === false) {
-      setTimeout(() => { const tab = document.querySelector("button[data-tab=\"abonnement\"]"); if(tab) tab.click(); else window.location.hash = "#abonnement"; }, 100);
-      onTriggerToast("Quota dépassé. Redirection vers l abonnement...", "warning");
-      return;
-    }
-    onTriggerToast('Préparation...','info');
-    try {
-      let el = document.getElementById('__qt_r') as HTMLDivElement;
-      if (!el) { el = document.createElement('div'); el.id='__qt_r'; el.style.cssText='position:fixed;left:-4000px;top:0;z-index:-1;background:#fff;'; document.body.appendChild(el); }
-      el.innerHTML = buildExportHTML();
-      const target = el.firstElementChild as HTMLElement;
-      const imgs = target.querySelectorAll('img');
-      await Promise.all(Array.from(imgs).map(i => i.complete ? Promise.resolve() : new Promise<void>(r => { i.onload=()=>r(); i.onerror=()=>r(); setTimeout(r,1500); })));
-      await new Promise(r => setTimeout(r, 100));
-      const cv = await html2canvas(target, { scale:2, useCORS:true, allowTaint:true, backgroundColor:'#fff', logging:false });
-      const du = cv.toDataURL('image/png');
-      const w = window.open('','_blank');
-      if(w){ w.document.write(`<!DOCTYPE html><html><head><title>${g('numero')}</title><style>body{margin:0;display:flex;justify-content:center;background:#fff;}img{max-width:100%;height:auto;}</style></head><body><img src="${du}" onload="setTimeout(function(){window.print();},400);"/></body></html>`); w.document.close(); }
-      else { await handlePDF(); }
-    } catch { onTriggerToast('Erreur impression','warning'); }
-  };
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5">
