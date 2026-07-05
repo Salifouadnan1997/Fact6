@@ -27,26 +27,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateToTab }) => {
 
   useEffect(() => {
     if (!user) return;
-    const fetchStats = async () => {
+        const fetchStats = async () => {
       try {
         const { count: fCount } = await supabase.from('factures').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
         const { count: qCount } = await supabase.from('quittances').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
         const { count: cCount } = await supabase.from('cv').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
         const { count: sCount } = await supabase.from('signatures').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
-        const { data: subData } = await supabase.from('abonnements').select('plan').eq('user_id', user.id).limit(1).single();
+
+        // Récupération de l'abonnement
+        const { data: subData } = await supabase.from('user_subscriptions').select('plan_slug').eq('user_id', user.id).eq('status', 'active').maybeSingle();
+        
+        // Récupération de la limite (le quota)
+        const { data: metricData } = await supabase.from('user_metrics').select('limit').eq('user_id', user.id).eq('metric', 'signatures').maybeSingle();
 
         setStats({
           factures: fCount || 0,
           quittances: qCount || 0,
           cv: cCount || 0,
           signatures: sCount || 0,
-          subscription: subData?.plan || 'Gratuit'
+          signaturesLimit: metricData?.limit || 5, // 5 par défaut
+          subscription: subData?.plan_slug || 'Gratuit'
         });
       } catch (error) {
-        console.error("Erreur de chargement des stats (tables peut-être inexistantes):", error);
-        // Garder les stats à 0 par défaut en cas d'erreur
+        console.error("Erreur de chargement:", error);
       }
     };
+
     fetchStats();
   }, [user]);
   const quickNavCards = [
