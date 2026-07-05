@@ -97,9 +97,9 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
   const [signColor, setSignColor] = useState('#1e293b');
 
         // Quota guard avec vérification d'authentification intégrée
-  const checkQuota = async (metric: string): Promise<boolean> => {
+    const checkQuota = async (metric: string): Promise<boolean> => {
     try {
-      // 1. On cherche l'ID de l'utilisateur (soit la variable locale, soit on demande à Supabase)
+      // 1. Identification de l'utilisateur
       let currentUserId = userId; 
 
       if (!currentUserId) {
@@ -107,39 +107,47 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
         if (user) {
           currentUserId = user.id;
         } else {
-          // Si l'utilisateur n'est VRAIMENT pas connecté
-          alert("Vous devez être connecté pour télécharger ou imprimer. Redirection...");
-          // Si vous avez un onglet de connexion, décommentez la ligne du dessous :
-          // if (onNavigateToTab) onNavigateToTab('login'); 
+          onTriggerToast("Vous devez être connecté pour continuer.", "warning");
           return false;
         }
       }
 
-      // 2. Maintenant qu'on a un ID, on interroge la base de données
+      // 2. Appel à la base de données
       const { data, error } = await supabase.rpc("check_and_increment", { 
         p_user_id: currentUserId, 
         p_metric: metric 
       });
       
       if (error) {
-        alert("Erreur Supabase : " + error.message);
+        onTriggerToast("Erreur de connexion au serveur.", "warning");
         return false;
       }
 
-      // 3. Vérification du résultat
+      // 3. Gestion du quota atteint
       if (data?.allowed === false) {
         const msg = `Vos ${data.limit} ${metric} gratuites sont épuisées 🚀 Passez au plan Pro !`;
         onTriggerToast(msg, "warning");
-        if (onNavigateToTab) setTimeout(() => onNavigateToTab('subscription'), 2500);
+        
+        // Tentative de redirection via le système d'onglets, sinon redirection forcée
+        setTimeout(() => {
+          if (typeof onNavigateToTab === 'function') {
+            onNavigateToTab('subscription');
+          } else {
+            // Redirection de secours si le système d'onglet n'est pas accessible ici
+            window.location.href = '/subscription'; 
+          }
+        }, 2500);
+        
         return false;
       }
       
       return true;
     } catch (err: any) {
-      alert("Erreur inattendue : " + err.message);
+      console.error("Erreur quota :", err);
       return false;
     }
   };
+
 
   // Sign canvas
   useEffect(() => {
