@@ -251,7 +251,11 @@ function AuthenticatedApp({ authUser, onLogout }: { authUser: AuthSession; onLog
             <StampSignature currentInvoice={currentInvoice} onChangeInvoice={setCurrentInvoice} onTriggerToast={triggerToast} />
           )}
           {activeTab === 'document-signer' && (
-            <DocumentSigner currentInvoice={currentInvoice} onTriggerToast={triggerToast} />
+            <DocumentSigner 
+    currentInvoice={currentInvoice} 
+    onTriggerToast={triggerToast} 
+    onNavigateToTab={handleNavigateToTab} 
+/>
           )}
           {activeTab === 'ai-assistant' && (
             <AIAssistant products={products} analytics={analytics} onNavigateToTab={handleNavigateToTab} onTriggerToast={triggerToast} />
