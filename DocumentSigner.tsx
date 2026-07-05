@@ -96,24 +96,28 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
   const [hasDrawn, setHasDrawn] = useState(false);
   const [signColor, setSignColor] = useState('#1e293b');
 
-    // Quota guard corrigé : Ne bloque plus si la fonction Supabase n'existe pas
+      // Quota guard en mode DEBUG
   const checkQuota = async (metric: string): Promise<boolean> => {
     try {
+      if (!userId) {
+        alert("Erreur locale : l'ID utilisateur (userId) est vide ou introuvable.");
+        return false;
+      }
+
       const { data, error } = await supabase.rpc("check_and_increment", { 
         p_user_id: userId, 
         p_metric: metric 
       });
       
-      // Si Supabase ne trouve pas la fonction, on autorise l'action par défaut
-      if (error && error.message.includes("Could not find the function")) {
-        console.warn("Fonction check_and_increment introuvable sur Supabase. Vérification ignorée.");
-        return true; 
+      // S'il y a une erreur avec Supabase, on l'affiche à l'écran
+      if (error) {
+        alert("Erreur Supabase : " + error.message);
+        return false; // On bloque pour être sûr de voir le problème
       }
-
-      // S'il y a une autre vraie erreur, on la signale
-      if (error) throw error;
       
-      // Si la fonction existe et répond que le quota est dépassé
+      // Afficher ce que la base de données répond
+      // alert("Réponse DB : allowed=" + data?.allowed + " | limit=" + data?.limit + " | used=" + data?.used);
+
       if (data?.allowed === false) {
         const msg = `Vos ${data.limit} ${metric} gratuites sont épuisées 🚀 Passez au plan Pro !`;
         onTriggerToast(msg, "warning");
@@ -123,9 +127,8 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
       
       return true;
     } catch (err: any) {
-      console.error("Erreur inattendue du quota :", err);
-      // En cas de bug réseau ou autre, on ne bloque pas l'utilisateur
-      return true; 
+      alert("CRASH Code : " + err.message);
+      return false;
     }
   };
 
