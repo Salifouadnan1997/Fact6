@@ -98,38 +98,35 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
   const [signColor, setSignColor] = useState('#1e293b');
 
         // Quota guard avec vérification d'authentification intégrée
-        const checkQuota = async (metric: string): Promise<boolean> => {
+          const checkQuota = async (metric: string): Promise<boolean> => {
     try {
-      // 1. Identification
       let currentUserId = userId; 
       if (!currentUserId) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) currentUserId = user.id;
       }
 
-      // 2. Appel base de données
+      // ⚠️ VÉRIFIEZ CECI : Regardez dans 'facture' si c'est bien ce nom et ces paramètres !
       const { data, error } = await supabase.rpc("check_and_increment", { 
         p_user_id: currentUserId, 
         p_metric: metric 
       });
       
       if (error) {
-        onTriggerToast("Erreur de connexion au serveur.", "warning");
+        onTriggerToast("Erreur serveur : " + error.message, "warning");
         return false;
       }
 
-      // 3. Vérification quota + Redirection infaillible
       if (data?.allowed === false) {
-        onTriggerToast(`Vos ${data.limit} ${metric} gratuites sont épuisées.`, "warning");
+        onTriggerToast(`Vos ${data.limit} ${metric} gratuites sont épuisées 🚀`, "warning");
         
         setTimeout(() => {
-          // La méthode infaillible :
+          // ⚠️ VÉRIFIEZ CECI : Quel est le mot exact utilisé dans 'facture' ? 
+          // Si c'est 'abonnement', changez 'subscription' en 'abonnement' ci-dessous.
           if (typeof onNavigateToTab === 'function') {
-             // 1er choix : On utilise le système d'onglets de votre tableau de bord
-             onNavigateToTab('subscription');
+             onNavigateToTab('subscription'); // <- MODIFIER ICI SI BESOIN
           } else {
-             // 2ème choix (Force brute) : On force le navigateur à changer d'URL sans React Router
-             window.location.href = '/subscription';
+             window.location.href = '/subscription'; // <- MODIFIER ICI SI BESOIN
           }
         }, 1500);
         
@@ -138,7 +135,7 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
       
       return true;
     } catch (err: any) {
-      console.error("Erreur quota :", err);
+      console.error(err);
       return false;
     }
   };
