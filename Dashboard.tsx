@@ -92,11 +92,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateToTab }) => {
           <span className="text-2xl font-black text-slate-900">{stats.signatures}</span>
           <span className="text-[10px] font-bold text-slate-500 uppercase">Signatures</span>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center col-span-2 md:col-span-1">
+                <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 shadow-sm flex flex-col items-center justify-center text-center col-span-2 md:col-span-1">
           <div className="bg-amber-100 p-3 rounded-full text-amber-600 mb-2"><CreditCard className="w-6 h-6" /></div>
           <span className="text-lg font-black text-slate-900 capitalize">{stats.subscription}</span>
-          <span className="text-[10px] font-bold text-slate-500 uppercase">Abonnement</span>
+          <span className="text-[10px] font-bold text-amber-700 uppercase mt-1">Quota : {stats.signatures} / {stats.signaturesLimit}</span>
         </div>
+
       </div>
 
       {/* Header Banner */}
