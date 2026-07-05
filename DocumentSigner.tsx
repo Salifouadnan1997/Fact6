@@ -96,28 +96,37 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
   const [hasDrawn, setHasDrawn] = useState(false);
   const [signColor, setSignColor] = useState('#1e293b');
 
-      // Quota guard en mode DEBUG
+        // Quota guard avec vérification d'authentification intégrée
   const checkQuota = async (metric: string): Promise<boolean> => {
     try {
-      if (!userId) {
-        alert("Erreur locale : l'ID utilisateur (userId) est vide ou introuvable.");
-        return false;
+      // 1. On cherche l'ID de l'utilisateur (soit la variable locale, soit on demande à Supabase)
+      let currentUserId = userId; 
+
+      if (!currentUserId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          currentUserId = user.id;
+        } else {
+          // Si l'utilisateur n'est VRAIMENT pas connecté
+          alert("Vous devez être connecté pour télécharger ou imprimer. Redirection...");
+          // Si vous avez un onglet de connexion, décommentez la ligne du dessous :
+          // if (onNavigateToTab) onNavigateToTab('login'); 
+          return false;
+        }
       }
 
+      // 2. Maintenant qu'on a un ID, on interroge la base de données
       const { data, error } = await supabase.rpc("check_and_increment", { 
-        p_user_id: userId, 
+        p_user_id: currentUserId, 
         p_metric: metric 
       });
       
-      // S'il y a une erreur avec Supabase, on l'affiche à l'écran
       if (error) {
         alert("Erreur Supabase : " + error.message);
-        return false; // On bloque pour être sûr de voir le problème
+        return false;
       }
-      
-      // Afficher ce que la base de données répond
-      // alert("Réponse DB : allowed=" + data?.allowed + " | limit=" + data?.limit + " | used=" + data?.used);
 
+      // 3. Vérification du résultat
       if (data?.allowed === false) {
         const msg = `Vos ${data.limit} ${metric} gratuites sont épuisées 🚀 Passez au plan Pro !`;
         onTriggerToast(msg, "warning");
@@ -127,7 +136,7 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
       
       return true;
     } catch (err: any) {
-      alert("CRASH Code : " + err.message);
+      alert("Erreur inattendue : " + err.message);
       return false;
     }
   };
