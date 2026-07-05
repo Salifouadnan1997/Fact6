@@ -5,7 +5,6 @@ import jsPDF from 'jspdf';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Invoice } from './types';
 import { supabase } from './src/config/supabaseClient';
-import { useNavigate } from 'react-router-dom';
 
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs`;
@@ -74,7 +73,6 @@ interface Props {
 }
 
 export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTriggerToast, onNavigateToTab }) => {
-  const navigate = useNavigate();
   const [pages, setPages] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [docName, setDocName] = useState('');
@@ -100,7 +98,7 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
   const [signColor, setSignColor] = useState('#1e293b');
 
         // Quota guard avec vérification d'authentification intégrée
-      const checkQuota = async (metric: string): Promise<boolean> => {
+        const checkQuota = async (metric: string): Promise<boolean> => {
     try {
       // 1. Identification
       let currentUserId = userId; 
@@ -120,13 +118,19 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
         return false;
       }
 
-      // 3. Vérification quota + Redirection (La "magie" des autres fichiers)
+      // 3. Vérification quota + Redirection infaillible
       if (data?.allowed === false) {
         onTriggerToast(`Vos ${data.limit} ${metric} gratuites sont épuisées.`, "warning");
         
-        // On utilise la même méthode que dans Facture/Quittance :
         setTimeout(() => {
-          navigate('/subscription');
+          // La méthode infaillible :
+          if (typeof onNavigateToTab === 'function') {
+             // 1er choix : On utilise le système d'onglets de votre tableau de bord
+             onNavigateToTab('subscription');
+          } else {
+             // 2ème choix (Force brute) : On force le navigateur à changer d'URL sans React Router
+             window.location.href = '/subscription';
+          }
         }, 1500);
         
         return false;
@@ -138,7 +142,6 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
       return false;
     }
   };
-
 
 
   // Sign canvas
