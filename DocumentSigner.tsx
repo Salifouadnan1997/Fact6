@@ -99,22 +99,16 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
   const [signColor, setSignColor] = useState('#1e293b');
 
         // Quota guard avec vérification d'authentification intégrée
-    const checkQuota = async (metric: string): Promise<boolean> => {
+      const checkQuota = async (metric: string): Promise<boolean> => {
     try {
-      // 1. Identification de l'utilisateur
+      // 1. Identification
       let currentUserId = userId; 
-
       if (!currentUserId) {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          currentUserId = user.id;
-        } else {
-          onTriggerToast("Vous devez être connecté pour continuer.", "warning");
-          return false;
-        }
+        if (user) currentUserId = user.id;
       }
 
-      // 2. Appel à la base de données
+      // 2. Appel base de données
       const { data, error } = await supabase.rpc("check_and_increment", { 
         p_user_id: currentUserId, 
         p_metric: metric 
@@ -125,16 +119,14 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
         return false;
       }
 
-      // 3. Gestion du quota atteint
+      // 3. Vérification quota + Redirection (La "magie" des autres fichiers)
       if (data?.allowed === false) {
-        const msg = `Vos ${data.limit} ${metric} gratuites sont épuisées 🚀 Passez au plan Pro !`;
-        onTriggerToast(msg, "warning");
+        onTriggerToast(`Vos ${data.limit} ${metric} gratuites sont épuisées.`, "warning");
         
-        // Tentative de redirection via le système d'onglets, sinon redirection forcée
+        // On utilise la même méthode que dans Facture/Quittance :
         setTimeout(() => {
-    console.log("Tentative de redirection vers /subscription");
-    navigate('/subscription'); // Vérifiez que le chemin est EXACTEMENT celui de votre route
-}, 2500);
+          navigate('/subscription');
+        }, 1500);
         
         return false;
       }
@@ -145,6 +137,7 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
       return false;
     }
   };
+
 
 
   // Sign canvas
