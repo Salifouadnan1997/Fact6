@@ -23,7 +23,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ onNavigateToTab }) => {
   const { user } = useAuth();
-  const [stats, setStats] = useState({ factures: 0, quittances: 0, cv: 0, signatures: 0, subscription: 'Gratuit' });
+  const [stats, setStats] = useState({ factures: 0, quittances: 0, cv: 0, signatures: 0, signaturesLimit: 0, subscription: 'Gratuit' });
 
   useEffect(() => {
     if (!user) return;
