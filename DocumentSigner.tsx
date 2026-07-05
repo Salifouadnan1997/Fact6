@@ -98,15 +98,21 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
   const [signColor, setSignColor] = useState('#1e293b');
 
         // Quota guard avec vérification d'authentification intégrée
-          const checkQuota = async (metric: string): Promise<boolean> => {
+            const checkQuota = async (metric: string): Promise<boolean> => {
     try {
+      // 1. Récupération STRICTE de l'ID utilisateur (pour éviter que Supabase plante)
       let currentUserId = userId; 
       if (!currentUserId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) currentUserId = user.id;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          currentUserId = session.user.id;
+        } else {
+          onTriggerToast("Erreur d'authentification : Utilisateur non reconnu.", "warning");
+          return false;
+        }
       }
 
-      // ⚠️ VÉRIFIEZ CECI : Regardez dans 'facture' si c'est bien ce nom et ces paramètres !
+      // 2. Appel avec les DEUX paramètres obligatoires (comme dans Facture)
       const { data, error } = await supabase.rpc("check_and_increment", { 
         p_user_id: currentUserId, 
         p_metric: metric 
@@ -117,18 +123,22 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
         return false;
       }
 
+      // 3. Vérification de la limite
       if (data?.allowed === false) {
-        onTriggerToast(`Vos ${data.limit} ${metric} gratuites sont épuisées 🚀`, "warning");
+        // Message dynamique basé sur ce que vous avez dans Facture
+        const isFreePlan = data.limit === 5;
+        const msg = isFreePlan 
+          ? `Vos ${data.limit} ${metric} gratuites sont épuisées 🚀 Passez au plan Pro !` 
+          : "Votre abonnement est épuisé. Renouvelez-le pour continuer.";
+          
+        onTriggerToast(msg, "warning");
         
+        // 4. Redirection fluide après 2.5 secondes (Exactement comme dans Facture)
         setTimeout(() => {
-          // ⚠️ VÉRIFIEZ CECI : Quel est le mot exact utilisé dans 'facture' ? 
-          // Si c'est 'abonnement', changez 'subscription' en 'abonnement' ci-dessous.
           if (typeof onNavigateToTab === 'function') {
-             onNavigateToTab('subscription'); // <- MODIFIER ICI SI BESOIN
-          } else {
-             window.location.href = '/subscription'; // <- MODIFIER ICI SI BESOIN
+             onNavigateToTab('subscription'); 
           }
-        }, 1500);
+        }, 2500);
         
         return false;
       }
@@ -139,7 +149,6 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
       return false;
     }
   };
-
 
   // Sign canvas
   useEffect(() => {
