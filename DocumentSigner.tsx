@@ -130,13 +130,9 @@ export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTrig
         
         // Tentative de redirection via le système d'onglets, sinon redirection forcée
         setTimeout(() => {
-          if (typeof onNavigateToTab === 'function') {
-            onNavigateToTab('subscription');
-          } else {
-            // Redirection de secours si le système d'onglet n'est pas accessible ici
-            window.location.href = '/subscription'; 
-          }
-        }, 2500);
+    console.log("Tentative de redirection vers /subscription");
+    navigate('/subscription'); // Vérifiez que le chemin est EXACTEMENT celui de votre route
+}, 2500);
         
         return false;
       }
