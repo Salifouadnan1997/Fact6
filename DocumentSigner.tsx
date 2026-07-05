@@ -5,6 +5,8 @@ import jsPDF from 'jspdf';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Invoice } from './types';
 import { supabase } from './src/config/supabaseClient';
+import { useNavigate } from 'react-router-dom';
+
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs`;
 
