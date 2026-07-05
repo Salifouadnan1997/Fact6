@@ -74,6 +74,7 @@ interface Props {
 }
 
 export const DocumentSigner: React.FC<Props> = ({ currentInvoice, userId, onTriggerToast, onNavigateToTab }) => {
+  const navigate = useNavigate();
   const [pages, setPages] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [docName, setDocName] = useState('');
