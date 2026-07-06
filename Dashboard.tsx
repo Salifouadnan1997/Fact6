@@ -27,31 +27,58 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateToTab }) => {
 
   useEffect(() => {
     if (!user) return;
-        const fetchStats = async () => {
+            const fetchStats = async () => {
       try {
+        // 1. Récupération des comptages réels de l'utilisateur
         const { count: fCount } = await supabase.from('factures').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
         const { count: qCount } = await supabase.from('quittances').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
         const { count: cCount } = await supabase.from('cv').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
         const { count: sCount } = await supabase.from('signatures').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
 
-        // Récupération de l'abonnement
+        // 2. Récupération du plan actif de l'utilisateur
         const { data: subData } = await supabase.from('user_subscriptions').select('plan_slug').eq('user_id', user.id).eq('status', 'active').maybeSingle();
-        
-        // Récupération de la limite (le quota)
-        const { data: metricData } = await supabase.from('user_metrics').select('limit').eq('user_id', user.id).eq('metric', 'signatures').maybeSingle();
+        const planSlug = subData?.plan_slug?.toLowerCase() || 'gratuit';
+
+        // 3. Lecture dynamique de la table 'plans'
+        const { data: planLimits } = await supabase.from('plans').select('*').eq('slug', planSlug).maybeSingle();
+
+        // Extraction précise depuis l'objet JSON 'quotas' trouvé via Termux
+        let fLimit = planLimits?.quotas?.factures || (planSlug === 'gratuit' ? 5 : 200);
+        let qLimit = planLimits?.quotas?.quittances || (planSlug === 'gratuit' ? 3 : 60);
+        let sLimit = planLimits?.quotas?.signatures || (planSlug === 'gratuit' ? 2 : 30);
+        let cLimit = planLimits?.quotas?.cv_ia || (planSlug === 'gratuit' ? 0 : 5);
+        let planDisplayName = planLimits?.name || planSlug;
+
+        // 4. Secours/Spécificité : Si user_metrics contient une règle sur-mesure (ex: vos 500 signatures)
+        const { data: metrics } = await supabase.from('user_metrics').select('metric, limit').eq('user_id', user.id);
+        if (metrics) {
+          const customFull = metrics.find(m => m.metric === 'factures')?.limit;
+          const customQuit = metrics.find(m => m.metric === 'quittances')?.limit;
+          const customSign = metrics.find(m => m.metric === 'signatures')?.limit;
+          const customCv = metrics.find(m => m.metric === 'cv')?.limit;
+
+          if (customFull !== undefined) fLimit = customFull;
+          if (customQuit !== undefined) qLimit = customQuit;
+          if (customSign !== undefined) sLimit = customSign;
+          if (customCv !== undefined) cLimit = customCv;
+        }
 
         setStats({
           factures: fCount || 0,
+          facturesLimit: fLimit,
           quittances: qCount || 0,
+          quittancesLimit: qLimit,
           cv: cCount || 0,
+          cvLimit: cLimit,
           signatures: sCount || 0,
-          signaturesLimit: metricData?.limit || 5, // 5 par défaut
-          subscription: subData?.plan_slug || 'Gratuit'
+          signaturesLimit: sLimit,
+          subscription: planDisplayName
         });
       } catch (error) {
-        console.error("Erreur de chargement:", error);
+        console.error("Erreur lors du chargement des statistiques:", error);
       }
     };
+
 
     fetchStats();
   }, [user]);
