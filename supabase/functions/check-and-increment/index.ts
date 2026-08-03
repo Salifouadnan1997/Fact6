@@ -1,23 +1,18 @@
-Deno.serve(async (req) => {
-  try {
-    return new Response(
-      JSON.stringify({ ok: true }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-        },
+import { serve } from "https://deno.land/std/http/server.ts";
+
+serve(async (_req: Request) => {
+  return new Response(
+    JSON.stringify({
+      success: true,
+      incremented: false,
+      unlimited: true,
+      message: "Comptage des quotas désactivé."
+    }),
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json"
       }
-    );
-  } catch (err) {
-    return new Response(
-      JSON.stringify({ error: String(err) }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
-  }
+    }
+  );
 });
