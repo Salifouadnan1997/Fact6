@@ -28,7 +28,7 @@ export interface CVTemplate {
 const contactLine = (icon: string, val: string) => val ? `<div style="margin-bottom:5px;font-size:12px;">${icon} ${val}</div>` : '';
 const allContacts = (d: CVData) => [
   contactLine('📞', d.tel), contactLine('✉️', d.email),
-  contactLine('📍', [d.adresse, d.ville, d.pays].filter(Boolean).join(', ')),
+  contactLine('👤', [d.adresse, d.ville, d.pays].filter(Boolean).join(', ')),
   contactLine('🔗', d.linkedin), contactLine('💻', d.github),
   contactLine('🌐', d.portfolio), contactLine('📘', d.facebook), contactLine('🎬', d.youtube),
 ].join('');
@@ -252,7 +252,7 @@ const moreTemplates: CVTemplate[] = [
       ${photoCircle(d.photo,65,'border:3px solid #fff;display:block;margin:0 auto 10px;')}
       <div style="text-align:center;font-size:14px;font-weight:900;margin-bottom:2px;">${d.nom||'Nom'}</div>
       <div style="text-align:center;font-size:8px;opacity:0.8;margin-bottom:10px;">${d.titre||'Titre'}</div>
-      ${contactLine('📞',d.tel)}${contactLine('✉️',d.email)}${contactLine('📍',d.ville)}${contactLine('🔗',d.linkedin)}
+      ${contactLine('📞',d.tel)}${contactLine('✉️',d.email)}${contactLine('👤',d.ville)}${contactLine('🔗',d.linkedin)}
       ${d.skills?`<div style="margin-top:10px;font-size:7px;opacity:0.7;text-transform:uppercase;margin-bottom:4px;">Compétences</div>${skillBars(d.skills,'#a78bfa')}`:''}</div>
       <div style="flex:1;padding:18px;color:#1e293b;">
       ${d.resume?sectionTitle('Profil',c,'underline')+`<div style="font-size:9px;color:#555;line-height:1.5;">${d.resume}</div>`:''}
